@@ -3,14 +3,10 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <prerequisites>
-    <maven>2.0.9</maven>
-  </prerequisites>
-
   <parent>
     <groupId>org.nuxeo.ecm.core</groupId>
     <artifactId>nuxeo-core-parent</artifactId>
-    <version>5.4.1-SNAPSHOT</version>
+    <version>5.4.0.1</version>
   </parent>
 
   <artifactId>nuxeo-core-binarymanager-sql</artifactId>

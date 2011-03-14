@@ -36,6 +36,9 @@ import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.file.FileCache;
 import org.nuxeo.common.file.LRUFileCache;
 import org.nuxeo.ecm.core.storage.StorageException;
+import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
+import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
+import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
 import org.nuxeo.runtime.api.DataSourceHelper;
 
@@ -128,49 +131,27 @@ public class SQLBinaryManager extends DefaultBinaryManager {
     }
 
     protected void createSql(String tableName) throws IOException {
-        // TODO allow construction of Database without a RepositoryImpl handy
-        // Table table = database.addTable(tableName);
-        // Column idCol = table.addColumn(COL_ID, dummytype, COL_ID, null);
-        // Column binCol = table.addColumn(COL_BINARY, dummytype, COL_BINARY,
-        // null);
-        Dialect dialect = getDialect();
-        char oq = dialect.openQuote();
-        char cq = dialect.closeQuote();
-        String quotedTable = oq + getTablePhysicalName(dialect, tableName) + cq;
-        String quotedIdCol = oq + getColumnPhysicalName(dialect, COL_ID) + cq;
-        String quotedBinCol = oq + getColumnPhysicalName(dialect, COL_BIN) + cq;
+        Database database = new Database(getDialect());
+        Table table = database.addTable(tableName);
+        ColumnType dummytype = ColumnType.STRING;
+        Column idCol = table.addColumn(COL_ID, dummytype, COL_ID, null);
+        Column binCol = table.addColumn(COL_BIN, dummytype, COL_BIN, null);
 
-        checkSql = String.format("SELECT 1 FROM %s WHERE %s = ?", quotedTable,
-                quotedIdCol);
+        checkSql = String.format("SELECT 1 FROM %s WHERE %s = ?",
+                table.getQuotedName(), idCol.getQuotedName());
         putSql = String.format("INSERT INTO %s (%s, %s) VALUES (?, ?)",
-                quotedTable, quotedIdCol, quotedBinCol);
-        getSql = String.format("SELECT %s FROM %s WHERE %s = ?", quotedBinCol,
-                quotedTable, quotedIdCol);
-    }
-
-    // from Database
-    protected String getTablePhysicalName(Dialect dialect, String name) {
-        return getPhysicalName(dialect, name);
-    }
-
-    // from Database
-    protected String getColumnPhysicalName(Dialect dialect, String name) {
-        return getPhysicalName(dialect, name);
-    }
-
-    // from Database
-    protected String getPhysicalName(Dialect dialect, String name) {
-        String physicalName = dialect.storesUpperCaseIdentifiers() ? name.toUpperCase()
-                : name.toLowerCase();
-        return physicalName.replace(':', '_');
+                table.getQuotedName(), idCol.getQuotedName(),
+                binCol.getQuotedName());
+        getSql = String.format("SELECT %s FROM %s WHERE %s = ?",
+                binCol.getQuotedName(), table.getQuotedName(),
+                idCol.getQuotedName());
     }
 
     protected Dialect getDialect() throws IOException {
         Connection connection = null;
         try {
             connection = dataSource.getConnection();
-            return Dialect.createDialect(connection, null,
-                    new RepositoryDescriptor());
+            return Dialect.createDialect(connection, null, null);
         } catch (StorageException e) {
             throw new IOException(e);
         } catch (SQLException e) {

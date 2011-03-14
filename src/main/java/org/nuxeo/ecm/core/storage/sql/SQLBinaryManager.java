@@ -33,6 +33,8 @@ import javax.sql.DataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.nuxeo.common.file.FileCache;
+import org.nuxeo.common.file.LRUFileCache;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
 import org.nuxeo.runtime.api.DataSourceHelper;
@@ -246,6 +248,7 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         try {
             digest = storeAndDigest(in, out);
         } finally {
+            in.close();
             out.close();
         }
 

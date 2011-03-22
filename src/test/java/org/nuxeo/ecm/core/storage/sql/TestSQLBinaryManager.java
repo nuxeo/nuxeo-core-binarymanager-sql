@@ -40,9 +40,9 @@ import org.nuxeo.runtime.api.Framework;
  */
 public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
-    private static final String CONTENT = "this is a file";
+    private static final String CONTENT = "this is a file au caf\u00e9";
 
-    private static final String CONTENT_MD5 = "139ec4f94a8c908e20e7c2dce5092af4";
+    private static final String CONTENT_MD5 = "d25ea4f4642073b7f218024d397dbaef";
 
     /** This directory will be deleted and recreated. */
     private static final String H2_DIR = "target/test/h2-ds";
@@ -148,6 +148,10 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         openSession();
         file = session.getDocument(file.getRef());
         blob = (Blob) file.getPropertyValue("file:content");
+        // check length first, uses a specific LENGTH query
+        assertEquals(bytes.length, blob.getLength());
+        assertEquals("blob.txt", blob.getFilename());
+        assertTrue(Arrays.equals(bytes, blob.getByteArray()));
     }
 
     public void testSQLBinaryManagerDuplicate() throws Exception {

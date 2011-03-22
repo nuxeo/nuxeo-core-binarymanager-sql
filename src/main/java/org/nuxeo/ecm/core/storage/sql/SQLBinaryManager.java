@@ -22,6 +22,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -40,12 +42,18 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
+import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectH2;
+import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectOracle;
+import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectSQLServer;
 import org.nuxeo.runtime.api.DataSourceHelper;
 
 /**
  * A Binary Manager that stores binaries as SQL BLOBs.
  * <p>
- * The blob keys is still computed
+ * The BLOBs are cached locally on first access for efficiency.
+ * <p>
+ * Because the BLOB length can be accessed independently of the binary stream,
+ * it is also cached in a simple text file if accessed before the stream.
  */
 public class SQLBinaryManager extends DefaultBinaryManager {
 
@@ -63,6 +71,8 @@ public class SQLBinaryManager extends DefaultBinaryManager {
 
     public static final String COL_BIN = "bin";
 
+    protected static final String LEN_DIGEST_SUFFIX = "-len";
+
     protected DataSource dataSource;
 
     protected FileCache fileCache;
@@ -72,6 +82,11 @@ public class SQLBinaryManager extends DefaultBinaryManager {
     protected String putSql;
 
     protected String getSql;
+
+    protected String getLengthSql;
+
+    // Used just to pass to Binary constructor TODO refactor Binary
+    protected File dummyFile;
 
     protected static boolean disableCheckExisting; // for unit tests
 
@@ -128,10 +143,15 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         fileCache = new LRUFileCache(dir, cacheSize);
         log.info("Using binary cache directory: " + dir.getPath() + " size: "
                 + cacheSizeStr);
+
+        // TODO refactor Binary
+        dummyFile = File.createTempFile("nxempty", null);
+        dummyFile.deleteOnExit();
     }
 
     protected void createSql(String tableName) throws IOException {
-        Database database = new Database(getDialect());
+        Dialect dialect = getDialect();
+        Database database = new Database(dialect);
         Table table = database.addTable(tableName);
         ColumnType dummytype = ColumnType.STRING;
         Column idCol = table.addColumn(COL_ID, dummytype, COL_ID, null);
@@ -144,6 +164,20 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                 binCol.getQuotedName());
         getSql = String.format("SELECT %s FROM %s WHERE %s = ?",
                 binCol.getQuotedName(), table.getQuotedName(),
+                idCol.getQuotedName());
+        // TODO move this to Dialect
+        String lengthFunc;
+        if (dialect instanceof DialectOracle) {
+            lengthFunc = "LENGTHB";
+        } else if (dialect instanceof DialectSQLServer) {
+            lengthFunc = "DATALENGTH";
+        } else if (dialect instanceof DialectH2) {
+            lengthFunc = "LENGTH";
+        } else { // PostgreSQL, MySQL
+            lengthFunc = "OCTET_LENGTH";
+        }
+        getLengthSql = String.format("SELECT %s(%s) FROM %s WHERE %s = ?",
+                lengthFunc, binCol.getQuotedName(), table.getQuotedName(),
                 idCol.getQuotedName());
     }
 
@@ -311,7 +345,54 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         // check in the cache
         File file = fileCache.getFile(digest);
         if (file == null) {
-            // fetch from database
+            return new SQLLazyBinary(digest);
+        } else {
+            return new Binary(file, digest, repositoryName);
+        }
+    }
+
+    /**
+     * A lazy Binary that fetches its remote stream on first access.
+     */
+    public class SQLLazyBinary extends Binary {
+
+        private static final long serialVersionUID = 1L;
+
+        protected Long sqlLength;
+
+        protected File sqlFile;
+
+        public SQLLazyBinary(String digest) {
+            super(dummyFile, digest);
+        }
+
+        @Override
+        public InputStream getStream() throws IOException {
+            if (sqlFile == null) {
+                sqlFile = fetchFile();
+                if (sqlFile != null) {
+                    sqlLength = Long.valueOf(sqlFile.length());
+                }
+            }
+            return sqlFile == null ? null : new FileInputStream(sqlFile);
+        }
+
+        /**
+         * Fetches the file from the cache or the remote database.
+         * <p>
+         * If something is retrieved from the database, it is put in cache.
+         *
+         * @return the blob, or {@code null} if the expected blob is missing
+         *         from the database.
+         */
+        protected File fetchFile() {
+            String digest = getDigest();
+
+            File f = fileCache.getFile(digest);
+            if (f != null) {
+                return f;
+            }
+
             Connection connection = null;
             try {
                 connection = dataSource.getConnection();
@@ -341,7 +422,7 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                     }
                 }
                 // register the file in the file cache
-                file = fileCache.putFile(digest, tmp);
+                return fileCache.putFile(digest, tmp);
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             } catch (IOException e) {
@@ -356,7 +437,105 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                 }
             }
         }
-        return new Binary(file, digest, repositoryName);
+
+        @Override
+        public long getLength() {
+            if (sqlLength == null) {
+                sqlLength = fetchLength();
+            }
+            return sqlLength == null ? 0 : sqlLength.longValue();
+        }
+
+        /**
+         * Fetches the length from the cache or the remote database.
+         * <p>
+         * If something is retrieved from the database, it is put in cache.
+         *
+         * @return the length, or {@code null} if the expected blob is missing
+         *         from the database.
+         */
+        protected Long fetchLength() {
+            Long len = getLengthFromCache();
+            if (len != null) {
+                return len;
+            }
+
+            String digest = getDigest();
+            Connection connection = null;
+            try {
+                connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(getLengthSql);
+                ps.setString(1, digest);
+                ResultSet rs = ps.executeQuery();
+                if (!rs.next()) {
+                    log.error("Unknown binary: " + digest);
+                    return null;
+                }
+                len = Long.valueOf(rs.getLong(1));
+                putLengthInCache(len);
+                return len;
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        log.error(e, e);
+                    }
+                }
+            }
+        }
+
+        protected Long getLengthFromCache() {
+            File f = fileCache.getFile(getDigest() + LEN_DIGEST_SUFFIX);
+            if (f == null) {
+                return null;
+            }
+            // read decimal length from file
+            InputStream in = null;
+            try {
+                in = new FileInputStream(f);
+                String len = IOUtils.toString(in);
+                return Long.valueOf(len);
+            } catch (Exception e) {
+                log.error(e, e);
+                return null;
+            } finally {
+                if (in != null) {
+                    try {
+                        in.close();
+                    } catch (IOException e) {
+                        log.error(e, e);
+                    }
+                }
+            }
+
+        }
+
+        protected void putLengthInCache(Long len) {
+            OutputStream out = null;
+            try {
+                File tmp = fileCache.getTempFile();
+                out = new FileOutputStream(tmp);
+                Writer writer = new OutputStreamWriter(out);
+                writer.write(len.toString());
+                writer.flush();
+                out.close();
+                out = null;
+                fileCache.putFile(getDigest() + LEN_DIGEST_SUFFIX, tmp);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } finally {
+                if (out != null) {
+                    try {
+                        out.close();
+                    } catch (IOException e) {
+                        log.error(e, e);
+                    }
+                }
+            }
+        }
     }
 
 }

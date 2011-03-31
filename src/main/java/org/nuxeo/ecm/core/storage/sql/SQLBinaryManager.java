@@ -37,6 +37,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.file.FileCache;
 import org.nuxeo.common.file.LRUFileCache;
+import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
@@ -139,7 +140,7 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         dir.delete();
         dir.mkdir();
         dir.deleteOnExit();
-        long cacheSize = parseSizeInBytes(cacheSizeStr);
+        long cacheSize = SizeUtils.parseSizeInBytes(cacheSizeStr);
         fileCache = new LRUFileCache(dir, cacheSize);
         log.info("Using binary cache directory: " + dir.getPath() + " size: "
                 + cacheSizeStr);
@@ -198,52 +199,6 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                     log.error(e, e);
                 }
             }
-        }
-    }
-
-    protected long parseSizeInBytes(String string) {
-        String digits = string;
-        if (digits.length() == 0) {
-            throw new RuntimeException("Invalid empty size");
-        }
-        char unit = digits.charAt(digits.length() - 1);
-        if (unit == 'b' || unit == 'B') {
-            digits = digits.substring(0, digits.length() - 1);
-            if (digits.length() == 0) {
-                throw new RuntimeException("Invalid size: '" + string + "'");
-            }
-            unit = digits.charAt(digits.length() - 1);
-        }
-        long mul;
-        switch (unit) {
-        case 'k':
-        case 'K':
-            mul = 1024;
-            break;
-        case 'm':
-        case 'M':
-            mul = 1024 * 1024;
-            break;
-        case 'g':
-        case 'G':
-            mul = 1024 * 1024 * 1024;
-            break;
-        default:
-            if (!Character.isDigit(unit)) {
-                throw new RuntimeException("Invalid size: '" + string + "'");
-            }
-            mul = 1;
-        }
-        if (mul != 1) {
-            digits = digits.substring(0, digits.length() - 1);
-            if (digits.length() == 0) {
-                throw new RuntimeException("Invalid size: '" + string + "'");
-            }
-        }
-        try {
-            return Long.parseLong(digits) * mul;
-        } catch (NumberFormatException e) {
-            throw new RuntimeException("Invalid size: '" + string + "'");
         }
     }
 

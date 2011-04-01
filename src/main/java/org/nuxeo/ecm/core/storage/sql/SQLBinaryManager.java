@@ -43,9 +43,6 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
-import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectH2;
-import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectOracle;
-import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.DialectSQLServer;
 import org.nuxeo.runtime.api.DataSourceHelper;
 
 /**
@@ -166,20 +163,9 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         getSql = String.format("SELECT %s FROM %s WHERE %s = ?",
                 binCol.getQuotedName(), table.getQuotedName(),
                 idCol.getQuotedName());
-        // TODO move this to Dialect
-        String lengthFunc;
-        if (dialect instanceof DialectOracle) {
-            lengthFunc = "LENGTHB";
-        } else if (dialect instanceof DialectSQLServer) {
-            lengthFunc = "DATALENGTH";
-        } else if (dialect instanceof DialectH2) {
-            lengthFunc = "LENGTH";
-        } else { // PostgreSQL, MySQL
-            lengthFunc = "OCTET_LENGTH";
-        }
         getLengthSql = String.format("SELECT %s(%s) FROM %s WHERE %s = ?",
-                lengthFunc, binCol.getQuotedName(), table.getQuotedName(),
-                idCol.getQuotedName());
+                dialect.getBlobLengthFunction(), binCol.getQuotedName(),
+                table.getQuotedName(), idCol.getQuotedName());
     }
 
     protected Dialect getDialect() throws IOException {

@@ -26,11 +26,13 @@ import java.util.Arrays;
 
 import javax.sql.DataSource;
 
+import org.apache.commons.io.IOUtils;
 import org.nuxeo.common.utils.FileUtils;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
+import org.nuxeo.ecm.core.storage.sql.SQLBinaryManager.SQLLazyBinary;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.DataSourceHelper;
 import org.nuxeo.runtime.api.Framework;
@@ -43,6 +45,10 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     private static final String CONTENT = "this is a file au caf\u00e9";
 
     private static final String CONTENT_MD5 = "d25ea4f4642073b7f218024d397dbaef";
+
+    private static final String CONTENT2 = "defg";
+
+    private static final String CONTENT2_MD5 = "025e4da7edac35ede583f5e8d51aa7ec";
 
     /** This directory will be deleted and recreated. */
     private static final String H2_DIR = "target/test/h2-ds";
@@ -85,23 +91,30 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         Connection connection = dataSource.getConnection();
         Statement st = connection.createStatement();
         String blobType;
+        String boolType;
         if (database instanceof DatabaseH2) {
             blobType = "BLOB";
+            boolType = "BOOLEAN";
         } else if (database instanceof DatabasePostgreSQL) {
             blobType = "BYTEA";
+            boolType = "BOOL";
         } else if (database instanceof DatabaseMySQL) {
             blobType = "BLOB";
+            boolType = "BIT";
         } else if (database instanceof DatabaseOracle) {
             blobType = "BLOB";
+            boolType = "NUMBER(1,0)";
         } else if (database instanceof DatabaseSQLServer) {
             blobType = "VARBINARY(MAX)";
+            boolType = "BIT";
         } else {
             fail("Database " + database.getClass().getSimpleName() + " TODO");
             return;
         }
         String sql = String.format(
-                "CREATE TABLE %s (%s VARCHAR(256) PRIMARY KEY, %s %s)", TABLE,
-                SQLBinaryManager.COL_ID, SQLBinaryManager.COL_BIN, blobType);
+                "CREATE TABLE %s (%s VARCHAR(256) PRIMARY KEY, %s %s, %s %s)",
+                TABLE, SQLBinaryManager.COL_ID, SQLBinaryManager.COL_BIN,
+                blobType, SQLBinaryManager.COL_MARK, boolType);
         st.execute(sql);
         connection.close();
     }
@@ -180,6 +193,71 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         file.setProperty("file", "content", blob);
         session.saveDocument(file);
         session.save();
+    }
+
+    public void testSQLBinaryManagerGC() throws Exception {
+        SQLBinaryManager binaryManager = (SQLBinaryManager) RepositoryResolver.getBinaryManager("test");
+
+        Binary binary = binaryManager.getBinary(CONTENT_MD5);
+        assertTrue(binary instanceof SQLLazyBinary);
+
+        // store binary
+        byte[] bytes = CONTENT.getBytes("UTF-8");
+        binary = binaryManager.getBinary(new ByteArrayInputStream(bytes));
+        assertNotNull(binary);
+
+        // get binary
+        binary = binaryManager.getBinary(CONTENT_MD5);
+        assertNotNull(binary);
+        assertEquals(bytes.length, binary.getLength());
+        assertEquals(CONTENT, IOUtils.toString(binary.getStream(), "UTF-8"));
+
+        // another binary we'll keep
+        binaryManager.getBinary(new ByteArrayInputStream(
+                CONTENT2.getBytes("UTF-8")));
+
+        // another binary we'll GC
+        binaryManager.getBinary(new ByteArrayInputStream(
+                "abc".getBytes("UTF-8")));
+
+        // GC in non-delete mode
+        BinaryGarbageCollector gc = binaryManager.getGarbageCollector();
+        assertFalse(gc.isInProgress());
+        gc.start();
+        assertTrue(gc.isInProgress());
+        gc.mark(CONTENT_MD5);
+        gc.mark(CONTENT2_MD5);
+        assertTrue(gc.isInProgress());
+        gc.stop(false);
+        assertFalse(gc.isInProgress());
+        BinaryManagerStatus status = gc.getStatus();
+        assertEquals(2, status.numBinaries);
+        assertEquals(bytes.length + 4, status.sizeBinaries);
+        assertEquals(1, status.numBinariesGC);
+        assertEquals(3, status.sizeBinariesGC);
+
+        // real GC
+        gc = binaryManager.getGarbageCollector();
+        gc.start();
+        gc.mark(CONTENT_MD5);
+        gc.mark(CONTENT2_MD5);
+        gc.stop(true);
+        status = gc.getStatus();
+        assertEquals(2, status.numBinaries);
+        assertEquals(bytes.length + 4, status.sizeBinaries);
+        assertEquals(1, status.numBinariesGC);
+        assertEquals(3, status.sizeBinariesGC);
+
+        // another GC after not marking content 2
+        gc = binaryManager.getGarbageCollector();
+        gc.start();
+        gc.mark(CONTENT_MD5);
+        gc.stop(true);
+        status = gc.getStatus();
+        assertEquals(1, status.numBinaries);
+        assertEquals(bytes.length, status.sizeBinaries);
+        assertEquals(1, status.numBinariesGC);
+        assertEquals(4, status.sizeBinariesGC);
     }
 
 }

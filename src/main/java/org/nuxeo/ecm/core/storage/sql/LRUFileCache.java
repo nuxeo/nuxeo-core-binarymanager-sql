@@ -1,15 +1,17 @@
 /*
- * (C) Copyright 2010 Nuxeo SA (http://nuxeo.com/) and contributors.
+ * (C) Copyright 2006-2011 Nuxeo SA (http://nuxeo.com/) and contributors.
  *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Lesser General Public License
- * (LGPL) version 2.1 which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/lgpl.html
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * Contributors:
  *     Florent Guillaume
@@ -25,8 +27,9 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.apache.commons.collections.map.ReferenceMap;
+import org.apache.commons.io.FileCleaningTracker;
 import org.apache.commons.io.IOUtils;
-import org.nuxeo.runtime.api.Framework;
 
 /**
  * A LRU cache of {@link File}s with capped filesystem size.
@@ -37,29 +40,42 @@ import org.nuxeo.runtime.api.Framework;
  * <p>
  * A file will never be actually removed from the filesystem while the File
  * object returned by {@link #getFile} is still referenced.
+ * <p>
+ * The cache keys are restricted to a subset of ASCII: letters, digits and
+ * dashes. Usually a MD5 or SHA1 hash is used.
  */
 public class LRUFileCache implements FileCache {
 
     /** Allowed key pattern, used as file path. */
-    public static Pattern SIMPLE_ASCII = Pattern.compile("[-_a-zA-Z0-9]+");
+    public static final Pattern SIMPLE_ASCII = Pattern.compile("[-_a-zA-Z0-9]+");
 
-    protected File dir;
+    protected final File dir;
 
-    protected long maxSize;
+    protected final long maxSize;
 
     /** Cached files. */
-    protected Map<String, LRUFileCacheEntry> cache;
+    protected final Map<String, LRUFileCacheEntry> cache;
+
+    /**
+     * Referenced files on the filesystem. Contains all the cached files, plus
+     * all those that have been marked for deletion but haven't been deleted
+     * yet. Because of the latter, this is a weak value map.
+     */
+    protected final Map<String, File> files;
 
     /** Size of the cached files. */
     protected long cacheSize;
 
     /** Most recently used entries from the cache are first. */
-    protected LinkedList<String> lru;
+    protected final LinkedList<String> lru;
+
+    // this creates a new thread
+    private static final FileCleaningTracker fileCleaningTracker = new FileCleaningTracker();
 
     /**
      * In-memory entry for a cached file.
      */
-    public static class LRUFileCacheEntry {
+    protected static class LRUFileCacheEntry {
         public File file;
 
         public long size;
@@ -72,10 +88,14 @@ public class LRUFileCache implements FileCache {
      * @param dir the directory to use to store cached files
      * @param maxSize the maximum size of the cache (in bytes)
      */
-    public LRUFileCache(File dir, long maxSize) throws IOException {
+    @SuppressWarnings("unchecked")
+    public LRUFileCache(File dir, long maxSize) {
         this.dir = dir;
         this.maxSize = maxSize;
         cache = new HashMap<String, LRUFileCacheEntry>();
+        // use a weak reference for the values: don't hold values longer than
+        // they need to be referenced elsewhere
+        files = new ReferenceMap(ReferenceMap.HARD, ReferenceMap.WEAK);
         lru = new LinkedList<String>();
     }
 
@@ -103,13 +123,24 @@ public class LRUFileCache implements FileCache {
      */
     @Override
     public synchronized File putFile(String key, InputStream in)
-            throws IllegalArgumentException, IOException {
+            throws IOException {
         try {
+            // check the cache
             LRUFileCacheEntry entry = cache.get(key);
             if (entry != null) {
                 return entry.file;
             }
-            File file = getTempFile();
+
+            // maybe the cache entry was just deleted but the file is still
+            // there?
+            File file = files.get(key);
+            if (file != null) {
+                // use not-yet-deleted file
+                return putFileInCache(key, file);
+            }
+
+            // store the stream in a temporary file
+            file = getTempFile();
             FileOutputStream out = new FileOutputStream(file);
             try {
                 IOUtils.copy(in, out);
@@ -130,27 +161,42 @@ public class LRUFileCache implements FileCache {
     @Override
     public synchronized File putFile(String key, File file)
             throws IllegalArgumentException, IOException {
+        // check the cache
         LRUFileCacheEntry entry = cache.get(key);
         if (entry != null) {
             file.delete(); // tmp file not used
             return entry.file;
         }
 
+        // maybe the cache entry was just deleted but the file is still
+        // there?
+        File dest = files.get(key);
+        if (dest != null) {
+            // use not-yet-deleted file
+            return putFileInCache(key, dest);
+        }
+
         // put file in cache with standard name
         checkKey(key);
-        File dest = new File(dir, key);
+        dest = new File(dir, key);
         if (!file.renameTo(dest)) {
             // already something there
             file.delete();
         }
-        file = dest;
-        long size = file.length();
+        return putFileInCache(key, dest);
+    }
 
+    /**
+     * Puts a file that's already in the correct filesystem location in the
+     * internal cache datastructures.
+     */
+    protected File putFileInCache(String key, File file) {
         // remove oldest entries until size fits
+        long size = file.length();
         ensureCapacity(size);
 
         // put new entry in cache
-        entry = new LRUFileCacheEntry();
+        LRUFileCacheEntry entry = new LRUFileCacheEntry();
         entry.size = size;
         entry.file = file;
         add(key, entry);
@@ -167,13 +213,17 @@ public class LRUFileCache implements FileCache {
 
     @Override
     public synchronized File getFile(String key) {
+        // check the cache
         LRUFileCacheEntry entry = cache.get(key);
-        if (entry == null) {
-            return null;
+        if (entry != null) {
+            // note access in most recently used list
+            recordAccess(key);
+            return entry.file;
         }
-        // note access in most recently used list
-        recordAccess(key);
-        return entry.file;
+
+        // maybe the cache entry was just deleted but the file is still
+        // there?
+        return files.get(key);
     }
 
     @Override
@@ -191,15 +241,17 @@ public class LRUFileCache implements FileCache {
 
     protected void add(String key, LRUFileCacheEntry entry) {
         cache.put(key, entry);
+        files.put(key, entry.file);
         lru.addFirst(key);
         cacheSize += entry.size;
     }
 
     protected void remove(String key) {
         LRUFileCacheEntry entry = cache.remove(key);
+        // don't remove from files here, the GC will do it
         cacheSize -= entry.size;
         // delete file when not referenced anymore
-        Framework.trackFile(entry.file, entry.file);
+        fileCleaningTracker.track(entry.file, entry.file);
     }
 
     protected void ensureCapacity(long size) {

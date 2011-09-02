@@ -287,8 +287,12 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                 ps.setString(1, digest);
                 // needs dbcp 1.4:
                 // ps.setBlob(2, new FileInputStream(file), file.length());
-                ps.setBinaryStream(2, new FileInputStream(tmp),
-                        (int) tmp.length());
+                FileInputStream tmpis = new FileInputStream(tmp);
+                try {
+                    ps.setBinaryStream(2, tmpis, (int) tmp.length());
+                } finally {
+                    tmpis.close();
+                }
                 ps.setBoolean(3, true); // mark new additions for GC
                 try {
                     ps.execute();

@@ -4,11 +4,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>org.nuxeo.ecm.core</groupId>
-    <artifactId>nuxeo-core-parent</artifactId>
+    <groupId>org.nuxeo</groupId>
+    <artifactId>nuxeo-addons-parent</artifactId>
     <version>5.5-SNAPSHOT</version>
   </parent>
 
+  <groupId>org.nuxeo.ecm.core</groupId>
   <artifactId>nuxeo-core-binarymanager-sql</artifactId>
   <name>Nuxeo Core SQL BinaryManager</name>
   <description>Nuxeo Core SQL BinaryManager</description>
@@ -82,17 +83,42 @@
     <dependency>
       <groupId>net.sourceforge.jtds</groupId>
       <artifactId>jtds</artifactId>
-      <version>1.2.2</version>
       <scope>test</scope>
     </dependency>
-    <!--
-    <dependency>
-      <groupId>com.oracle</groupId>
-      <artifactId>ojdbc5</artifactId>
-      <version>11.2.0.1.0</version>
-      <scope>test</scope>
-    </dependency>
-    -->
+    <!-- <dependency> -->
+    <!-- <groupId>com.oracle</groupId> -->
+    <!-- <artifactId>ojdbc5</artifactId> -->
+    <!-- <scope>test</scope> -->
+    <!-- </dependency> -->
   </dependencies>
+
+  <repositories>
+    <repository>
+      <id>public</id>
+      <url>http://maven.nuxeo.org/nexus/content/groups/public</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>public-snapshot</id>
+      <url>http://maven.nuxeo.org/nexus/content/groups/public-snapshot</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <scm>
+    <connection>scm:hg:http://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</connection>
+    <developerConnection>scm:hg:https://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</developerConnection>
+    <url>http://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</url>
+  </scm>
 
 </project>

@@ -290,16 +290,16 @@ public class SQLBinaryManager extends DefaultBinaryManager {
                 FileInputStream tmpis = new FileInputStream(tmp);
                 try {
                     ps.setBinaryStream(2, tmpis, (int) tmp.length());
+                    ps.setBoolean(3, true); // mark new additions for GC
+                    try {
+                        ps.execute();
+                    } catch (SQLException e) {
+                        if (!isDuplicateKeyException(e)) {
+                            throw e;
+                        }
+                    }
                 } finally {
                     tmpis.close();
-                }
-                ps.setBoolean(3, true); // mark new additions for GC
-                try {
-                    ps.execute();
-                } catch (SQLException e) {
-                    if (!isDuplicateKeyException(e)) {
-                        throw e;
-                    }
                 }
                 ps.close();
             }

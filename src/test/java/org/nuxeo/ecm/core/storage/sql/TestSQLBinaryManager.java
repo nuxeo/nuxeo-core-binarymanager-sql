@@ -33,6 +33,7 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
 import org.nuxeo.ecm.core.storage.sql.SQLBinaryManager.SQLLazyBinary;
+import org.nuxeo.ecm.core.storage.sql.coremodel.SQLBlob;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.DataSourceHelper;
 import org.nuxeo.runtime.api.Framework;
@@ -165,6 +166,13 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         assertEquals(bytes.length, blob.getLength());
         assertEquals("blob.txt", blob.getFilename());
         assertTrue(Arrays.equals(bytes, blob.getByteArray()));
+
+        SQLBinaryManager.resetCache = true;
+        closeSession();
+        openSession();
+        file = session.getDocument(file.getRef());
+        SQLBlob b = (SQLBlob) file.getPropertyValue("file:content");
+        assertNotNull(b.getBinary().getStreamSource().getLength());
     }
 
     public void testSQLBinaryManagerDuplicate() throws Exception {

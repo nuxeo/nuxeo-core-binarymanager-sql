@@ -116,9 +116,9 @@
   </repositories>
 
   <scm>
-    <connection>scm:hg:http://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</connection>
-    <developerConnection>scm:hg:https://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</developerConnection>
-    <url>http://hg.nuxeo.org/addons/nuxeo-core-binarymanager-sql</url>
+    <connection>scm:git:git://github.com/nuxeo/nuxeo-core-binarymanager-sql.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com:nuxeo/nuxeo-core-binarymanager-sql.git</developerConnection>
+    <url>https://github.com/nuxeo/nuxeo-core-binarymanager-sql</url>
   </scm>
 
 </project>

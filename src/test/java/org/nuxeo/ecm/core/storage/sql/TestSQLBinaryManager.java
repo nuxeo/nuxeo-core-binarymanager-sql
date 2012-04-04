@@ -26,6 +26,11 @@ import java.util.Arrays;
 
 import javax.sql.DataSource;
 
+import org.junit.Before;
+import org.junit.After;
+import org.junit.Test;
+import static org.junit.Assert.*;
+
 import org.apache.commons.io.IOUtils;
 import org.nuxeo.common.utils.FileUtils;
 import org.nuxeo.ecm.core.api.Blob;
@@ -63,7 +68,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     // also in repo-*-contrib.xml
     public static final String TABLE = "binaries";
 
-    @Override
+    @Before
     public void setUp() throws Exception {
         super.setUp();
         String db = database.getClass().getSimpleName().toLowerCase();
@@ -120,7 +125,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         connection.close();
     }
 
-    @Override
+    @After
     public void tearDown() throws Exception {
         if (database instanceof DatabaseH2) {
             String url = Framework.getProperty(H2_URL_PROP);
@@ -135,6 +140,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         super.tearDown();
     }
 
+    @Test
     public void testSQLBinaryManager() throws Exception {
         DocumentModel file = new DocumentModelImpl("/", "myfile", "File");
         file = session.createDocument(file);
@@ -175,6 +181,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         assertNotNull(b.getBinary().getStreamSource().getLength());
     }
 
+    @Test
     public void testSQLBinaryManagerDuplicate() throws Exception {
         DocumentModel file = new DocumentModelImpl("/", "myfile", "File");
         file = session.createDocument(file);
@@ -203,6 +210,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         session.save();
     }
 
+    @Test
     public void testSQLBinaryManagerGC() throws Exception {
         SQLBinaryManager binaryManager = (SQLBinaryManager) RepositoryResolver.getBinaryManager("test");
 

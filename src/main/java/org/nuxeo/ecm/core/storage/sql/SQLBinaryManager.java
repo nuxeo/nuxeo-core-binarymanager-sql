@@ -27,7 +27,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Collection;
 
 import javax.naming.NamingException;
 import javax.sql.DataSource;
@@ -53,7 +52,7 @@ import org.nuxeo.runtime.api.DataSourceHelper;
  * Because the BLOB length can be accessed independently of the binary stream,
  * it is also cached in a simple text file if accessed before the stream.
  */
-public class SQLBinaryManager extends DefaultBinaryManager {
+public class SQLBinaryManager extends AbstractBinaryManager {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 
@@ -154,7 +153,6 @@ public class SQLBinaryManager extends DefaultBinaryManager {
         createGarbageCollector();
     }
 
-    @Override
     protected void createGarbageCollector() {
         garbageCollector = new SQLBinaryGarbageCollector(this);
     }

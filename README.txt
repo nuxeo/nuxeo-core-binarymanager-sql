@@ -14,16 +14,16 @@ arbitrary (and specified in the repository configuration file), in
 the example below it's "binaries".
 
 PostgreSQL:
-  CREATE TABLE binaries (id VARCHAR(256) PRIMARY KEY, bin BYTEA, mark BOOL);
+  CREATE TABLE binaries (id VARCHAR(40) PRIMARY KEY, bin BYTEA, mark BOOL);
 
 MySQL:
-  CREATE TABLE binaries (id VARCHAR(256) PRIMARY KEY, bin BLOB, mark BIT);
+  CREATE TABLE binaries (id VARCHAR(40) PRIMARY KEY, bin BLOB, mark BIT);
 
 Oracle:
-  CREATE TABLE binaries (id VARCHAR2(250) PRIMARY KEY, bin BLOB, mark NUMBER(1,0));
+  CREATE TABLE binaries (id VARCHAR2(40) PRIMARY KEY, bin BLOB, mark NUMBER(1,0));
 
 SQL Server:
-  CREATE TABLE binaries (id VARCHAR(256) PRIMARY KEY, bin VARBINARY(MAX), mark BIT);
+  CREATE TABLE binaries (id VARCHAR(40) PRIMARY KEY, bin VARBINARY(MAX), mark BIT);
 
 
 2. Datasource

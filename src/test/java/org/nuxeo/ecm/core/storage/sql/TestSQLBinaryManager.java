@@ -98,6 +98,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         Statement st = connection.createStatement();
         String blobType;
         String boolType;
+        int size = 40; // max size for MD5 and SHA-256 hash
         if (database instanceof DatabaseH2) {
             blobType = "BLOB";
             boolType = "BOOLEAN";
@@ -118,8 +119,8 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
             return;
         }
         String sql = String.format(
-                "CREATE TABLE %s (%s VARCHAR(256) PRIMARY KEY, %s %s, %s %s)",
-                TABLE, SQLBinaryManager.COL_ID, SQLBinaryManager.COL_BIN,
+                "CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY, %s %s, %s %s)",
+                TABLE, SQLBinaryManager.COL_ID, size, SQLBinaryManager.COL_BIN,
                 blobType, SQLBinaryManager.COL_MARK, boolType);
         st.execute(sql);
         connection.close();

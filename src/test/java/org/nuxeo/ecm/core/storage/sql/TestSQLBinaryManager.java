@@ -90,6 +90,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
         deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
                 String.format("OSGI-INF/repo-%s-contrib.xml", db));
+        fireFrameworkStarted();
         openSession();
 
         // create table in database

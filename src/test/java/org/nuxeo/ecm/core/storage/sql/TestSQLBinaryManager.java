@@ -26,22 +26,25 @@ import java.util.Arrays;
 
 import javax.sql.DataSource;
 
-import org.junit.Before;
-import org.junit.After;
-import org.junit.Test;
-import static org.junit.Assert.*;
-
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.nuxeo.common.utils.FileUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
-import org.nuxeo.ecm.core.storage.sql.SQLBinaryManager.SQLLazyBinary;
 import org.nuxeo.ecm.core.storage.sql.coremodel.SQLBlob;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.DataSourceHelper;
 import org.nuxeo.runtime.api.Framework;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /*
  * Note that this unit test cannot be run with Nuxeo 5.4.0 (NXP-6021 needed).
@@ -78,7 +81,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
         if (database instanceof DatabaseH2) {
             File h2dir = new File(H2_DIR);
-            FileUtils.deleteTree(h2dir);
+            FileUtils.deleteDirectory(h2dir);
             h2dir.mkdirs();
             File h2db = new File(h2dir, "binaries");
             String h2Url = "jdbc:h2:" + h2db.getAbsolutePath();
@@ -217,7 +220,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         SQLBinaryManager binaryManager = (SQLBinaryManager) RepositoryResolver.getBinaryManager("test");
 
         Binary binary = binaryManager.getBinary(CONTENT_MD5);
-        assertTrue(binary instanceof SQLLazyBinary);
+        assertTrue(binary instanceof LazyBinary);
 
         // store binary
         byte[] bytes = CONTENT.getBytes("UTF-8");

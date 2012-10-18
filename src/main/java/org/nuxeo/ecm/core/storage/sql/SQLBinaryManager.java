@@ -34,8 +34,6 @@ import javax.sql.DataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.nuxeo.common.file.FileCache;
-import org.nuxeo.common.file.LRUFileCache;
 import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
@@ -52,7 +50,7 @@ import org.nuxeo.runtime.api.DataSourceHelper;
  * Because the BLOB length can be accessed independently of the binary stream,
  * it is also cached in a simple text file if accessed before the stream.
  */
-public class SQLBinaryManager extends AbstractBinaryManager {
+public class SQLBinaryManager extends BinaryCachingManager  {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 
@@ -76,7 +74,7 @@ public class SQLBinaryManager extends AbstractBinaryManager {
 
     protected DataSource dataSource;
 
-    protected FileCache fileCache;
+    protected BinaryFileCache fileCache;
 
     protected String checkSql;
 
@@ -146,7 +144,7 @@ public class SQLBinaryManager extends AbstractBinaryManager {
         dir.mkdir();
         dir.deleteOnExit();
         long cacheSize = SizeUtils.parseSizeInBytes(cacheSizeStr);
-        fileCache = new LRUFileCache(dir, cacheSize);
+        fileCache = new SQLBinaryFileCache(dir, cacheSize);
         log.info("Using binary cache directory: " + dir.getPath() + " size: "
                 + cacheSizeStr);
 
@@ -345,36 +343,19 @@ public class SQLBinaryManager extends AbstractBinaryManager {
             resetCache = false;
             fileCache.clear();
         }
-        // check in the cache
-        File file = fileCache.getFile(digest);
-        if (file == null) {
-            return new SQLLazyBinary(digest, fileCache, dataSource, getSql,
-                    getLengthSql);
-        } else {
-            return new Binary(file, digest, repositoryName);
-        }
+        return super.getBinary(digest);
     }
 
-    public static class SQLLazyBinary extends LazyBinary {
+    public class SQLBinaryFileCache extends BinaryFileCache {
 
-        private static final long serialVersionUID = 1L;
 
-        protected final DataSource dataSource;
-
-        protected final String getSql;
-
-        protected final String getLengthSql;
-
-        public SQLLazyBinary(String digest, FileCache fileCache,
-                DataSource dataSource, String getSql, String getLengthSql) {
-            super(digest, fileCache);
-            this.dataSource = dataSource;
-            this.getSql = getSql;
-            this.getLengthSql = getLengthSql;
+        public SQLBinaryFileCache(File dir, long maxSize) {
+            super(dir, maxSize);
         }
 
+
         @Override
-        protected boolean fetchFile(File tmp) {
+        public boolean fetchFile(String digest, File tmp) {
             Connection connection = null;
             try {
                 connection = dataSource.getConnection();
@@ -416,10 +397,11 @@ public class SQLBinaryManager extends AbstractBinaryManager {
                     }
                 }
             }
+
         }
 
         @Override
-        protected Long fetchLength() {
+        public Long fetchLength(String digest) {
             Connection connection = null;
             try {
                 connection = dataSource.getConnection();
@@ -602,5 +584,10 @@ public class SQLBinaryManager extends AbstractBinaryManager {
             status.gcDuration = System.currentTimeMillis() - startTime;
             startTime = 0;
         }
+    }
+
+    @Override
+    public BinaryFileCache fileCache() {
+        return fileCache;
     }
 }

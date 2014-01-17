@@ -1,10 +1,10 @@
 /*
- * (C) Copyright 2010-2011 Nuxeo SA (http://nuxeo.com/) and contributors.
+ * (C) Copyright 2010-2014 Nuxeo SA (http://nuxeo.com/) and contributors.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Lesser General Public License
  * (LGPL) version 2.1 which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/lgpl.html
+ * http://www.gnu.org/licenses/lgpl-2.1.html
  *
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -50,7 +50,7 @@ import org.nuxeo.runtime.api.DataSourceHelper;
  * Because the BLOB length can be accessed independently of the binary stream,
  * it is also cached in a simple text file if accessed before the stream.
  */
-public class SQLBinaryManager extends BinaryCachingManager  {
+public class SQLBinaryManager extends CachingBinaryManager  {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 
@@ -73,8 +73,6 @@ public class SQLBinaryManager extends BinaryCachingManager  {
     protected String dataSourceName;
 
     protected DataSource dataSource;
-
-    protected BinaryFileCache fileCache;
 
     protected String checkSql;
 
@@ -144,7 +142,7 @@ public class SQLBinaryManager extends BinaryCachingManager  {
         dir.mkdir();
         dir.deleteOnExit();
         long cacheSize = SizeUtils.parseSizeInBytes(cacheSizeStr);
-        fileCache = new SQLBinaryFileCache(dir, cacheSize);
+        initializeCache(dir, cacheSize, new SQLFileStorage());
         log.info("Using binary cache directory: " + dir.getPath() + " size: "
                 + cacheSizeStr);
 
@@ -247,77 +245,7 @@ public class SQLBinaryManager extends BinaryCachingManager  {
         return value.toString();
     }
 
-    @Override
-    public Binary getBinary(InputStream in) throws IOException {
-        // write the input stream to a temporary file, while computing a digest
-        File tmp = fileCache.getTempFile();
-        OutputStream out = new FileOutputStream(tmp);
-        String digest;
-        try {
-            digest = storeAndDigest(in, out);
-        } finally {
-            in.close();
-            out.close();
-        }
-
-        // store the blob in the SQL database
-        Connection connection = null;
-        try {
-            connection = dataSource.getConnection();
-            boolean existing;
-            if (disableCheckExisting) {
-                // for unit tests
-                existing = false;
-            } else {
-                logSQL(checkSql, digest);
-                PreparedStatement ps = connection.prepareStatement(checkSql);
-                ps.setString(1, digest);
-                ResultSet rs = ps.executeQuery();
-                existing = rs.next();
-                ps.close();
-            }
-            if (!existing) {
-                // insert new blob
-                logSQL(putSql, digest, "somebinary", Boolean.TRUE);
-                PreparedStatement ps = connection.prepareStatement(putSql);
-                ps.setString(1, digest);
-                // needs dbcp 1.4:
-                // ps.setBlob(2, new FileInputStream(file), file.length());
-                FileInputStream tmpis = new FileInputStream(tmp);
-                try {
-                    ps.setBinaryStream(2, tmpis, (int) tmp.length());
-                    ps.setBoolean(3, true); // mark new additions for GC
-                    try {
-                        ps.execute();
-                    } catch (SQLException e) {
-                        if (!isDuplicateKeyException(e)) {
-                            throw e;
-                        }
-                    }
-                } finally {
-                    tmpis.close();
-                }
-                ps.close();
-            }
-        } catch (SQLException e) {
-            throw new IOException(e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    log.error(e, e);
-                }
-            }
-        }
-
-        // register the file in the file cache if all went well
-        File file = fileCache.putFile(digest, tmp);
-
-        return new Binary(file, digest, repositoryName);
-    }
-
-    protected boolean isDuplicateKeyException(SQLException e) {
+    protected static boolean isDuplicateKeyException(SQLException e) {
         String sqlState = e.getSQLState();
         if ("23000".equals(sqlState)) {
             // MySQL: Duplicate entry ... for key ...
@@ -333,6 +261,11 @@ public class SQLBinaryManager extends BinaryCachingManager  {
             // PostgreSQL: duplicate key value violates unique constraint
             return true;
         }
+        if ("S0003".equals(sqlState) || "S0005".equals(sqlState)) {
+            // SQL Server: Snapshot isolation transaction aborted due to update
+            // conflict
+            return true;
+        }
         return false;
     }
 
@@ -346,16 +279,63 @@ public class SQLBinaryManager extends BinaryCachingManager  {
         return super.getBinary(digest);
     }
 
-    public class SQLBinaryFileCache extends BinaryFileCache {
-
-
-        public SQLBinaryFileCache(File dir, long maxSize) {
-            super(dir, maxSize);
-        }
-
+    public class SQLFileStorage implements FileStorage {
 
         @Override
-        public boolean fetchFile(String digest, File tmp) {
+        public void storeFile(String digest, File file) throws IOException {
+            Connection connection = null;
+            try {
+                connection = dataSource.getConnection();
+                boolean existing;
+                if (disableCheckExisting) {
+                    // for unit tests
+                    existing = false;
+                } else {
+                    logSQL(checkSql, digest);
+                    PreparedStatement ps = connection.prepareStatement(checkSql);
+                    ps.setString(1, digest);
+                    ResultSet rs = ps.executeQuery();
+                    existing = rs.next();
+                    ps.close();
+                }
+                if (!existing) {
+                    // insert new blob
+                    logSQL(putSql, digest, "somebinary", Boolean.TRUE);
+                    PreparedStatement ps = connection.prepareStatement(putSql);
+                    ps.setString(1, digest);
+                    // needs dbcp 1.4:
+                    // ps.setBlob(2, new FileInputStream(file), file.length());
+                    FileInputStream tmpis = new FileInputStream(file);
+                    try {
+                        ps.setBinaryStream(2, tmpis, (int) file.length());
+                        ps.setBoolean(3, true); // mark new additions for GC
+                        try {
+                            ps.execute();
+                        } catch (SQLException e) {
+                            if (!isDuplicateKeyException(e)) {
+                                throw e;
+                            }
+                        }
+                    } finally {
+                        IOUtils.closeQuietly(tmpis);
+                    }
+                    ps.close();
+                }
+            } catch (SQLException e) {
+                throw new IOException(e);
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        log.error(e, e);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public boolean fetchFile(String digest, File tmp) throws IOException {
             Connection connection = null;
             try {
                 connection = dataSource.getConnection();
@@ -368,26 +348,22 @@ public class SQLBinaryManager extends BinaryCachingManager  {
                     return false;
                 }
                 InputStream in = rs.getBinaryStream(1);
-                if (in == null) {
-                    log.error("Missing binary: " + digest);
-                    return false;
-                }
-                // store in file
                 OutputStream out = null;
                 try {
+                    if (in == null) {
+                        log.error("Missing binary: " + digest);
+                        return false;
+                    }
+                    // store in file
                     out = new FileOutputStream(tmp);
                     IOUtils.copy(in, out);
                 } finally {
-                    in.close();
-                    if (out != null) {
-                        out.close();
-                    }
+                    IOUtils.closeQuietly(in);
+                    IOUtils.closeQuietly(out);
                 }
                 return true;
             } catch (SQLException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new IOException(e);
             } finally {
                 if (connection != null) {
                     try {
@@ -397,11 +373,10 @@ public class SQLBinaryManager extends BinaryCachingManager  {
                     }
                 }
             }
-
         }
 
         @Override
-        public Long fetchLength(String digest) {
+        public Long fetchLength(String digest) throws IOException {
             Connection connection = null;
             try {
                 connection = dataSource.getConnection();
@@ -415,7 +390,7 @@ public class SQLBinaryManager extends BinaryCachingManager  {
                 }
                 return Long.valueOf(rs.getLong(1));
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                throw new IOException(e);
             } finally {
                 if (connection != null) {
                     try {
@@ -586,8 +561,4 @@ public class SQLBinaryManager extends BinaryCachingManager  {
         }
     }
 
-    @Override
-    public BinaryFileCache fileCache() {
-        return fileCache;
-    }
 }

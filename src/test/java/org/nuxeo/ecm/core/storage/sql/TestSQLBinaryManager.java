@@ -65,10 +65,9 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     /** Property used in the datasource URL. */
     private static final String H2_URL_PROP = "nuxeo.test.ds.url";
 
-    // also in datasource-*-contrib.xml and repo-*-contrib.xml
+    // also in datasource-*-contrib.xml
     public static final String DATASOURCE = "jdbc/binaries";
 
-    // also in repo-*-contrib.xml
     public static final String TABLE = "binaries";
 
     @Before
@@ -91,8 +90,6 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
                 String.format("OSGI-INF/datasource-%s-contrib.xml", db));
 
-        deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
-                String.format("OSGI-INF/repo-%s-contrib.xml", db));
         fireFrameworkStarted();
         openSession();
 
@@ -128,6 +125,13 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
                 blobType, SQLBinaryManager.COL_MARK, boolType);
         st.execute(sql);
         connection.close();
+    }
+
+    @Override
+    protected void deployRepositoryContrib() throws Exception {
+        database.setBinaryManager(SQLBinaryManager.class, "datasource="
+                + DATASOURCE + ",table=" + TABLE + ",cachesize=10MB");
+        super.deployRepositoryContrib();
     }
 
     @After

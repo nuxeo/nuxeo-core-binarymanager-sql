@@ -44,6 +44,7 @@ import org.nuxeo.ecm.core.storage.sql.coremodel.SQLBlob;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.DataSourceHelper;
 import org.nuxeo.runtime.api.Framework;
+import org.nuxeo.runtime.jtajca.NuxeoContainer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -75,6 +76,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
     public static final String TABLE = "binaries";
 
+    @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -92,8 +94,11 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
             ((AbstractRuntimeService) runtime).setProperty(H2_URL_PROP, h2Url);
         }
         deployBundle("org.nuxeo.runtime.datasource");
+        deployBundle("org.nuxeo.runtime.jtajca");
         deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
                 String.format("OSGI-INF/datasource-%s-contrib.xml", db));
+
+        NuxeoContainer.install();
 
         fireFrameworkStarted();
         openSession();
@@ -134,13 +139,15 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
     @Override
     protected void deployRepositoryContrib() throws Exception {
-        database.setBinaryManager(SQLBinaryManager.class, "datasource="
+        DatabaseHelper.setBinaryManager(SQLBinaryManager.class, "datasource="
                 + DATASOURCE + ",table=" + TABLE + ",cachesize=10MB");
         super.deployRepositoryContrib();
     }
 
+    @Override
     @After
     public void tearDown() throws Exception {
+        NuxeoContainer.uninstall();
         if (database instanceof DatabaseH2) {
             String url = Framework.getProperty(H2_URL_PROP);
             Connection connection = DriverManager.getConnection(url);

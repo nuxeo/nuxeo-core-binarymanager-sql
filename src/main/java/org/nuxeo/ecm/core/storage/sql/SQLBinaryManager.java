@@ -36,6 +36,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
+import org.nuxeo.ecm.core.storage.binary.Binary;
+import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
+import org.nuxeo.ecm.core.storage.binary.BinaryManagerDescriptor;
+import org.nuxeo.ecm.core.storage.binary.BinaryManagerRootDescriptor;
+import org.nuxeo.ecm.core.storage.binary.BinaryManagerStatus;
+import org.nuxeo.ecm.core.storage.binary.CachingBinaryManager;
+import org.nuxeo.ecm.core.storage.binary.FileStorage;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
@@ -95,18 +102,18 @@ public class SQLBinaryManager extends CachingBinaryManager  {
     protected static boolean resetCache; // for unit tests
 
     @Override
-    public void initialize(RepositoryDescriptor repositoryDescriptor)
+    public void initialize(BinaryManagerDescriptor binaryManagerDescriptor)
             throws IOException {
-        repositoryName = repositoryDescriptor.name;
-        descriptor = new BinaryManagerDescriptor();
+        repositoryName = binaryManagerDescriptor.repositoryName;
+        descriptor = new BinaryManagerRootDescriptor();
         descriptor.digest = getDigest();
-        log.info("Repository '" + repositoryDescriptor.name + "' using "
+        log.info("Repository '" + repositoryName + "' using "
                 + getClass().getSimpleName());
 
         dataSourceName = null;
         String tableName = null;
         String cacheSizeStr = DEFAULT_CACHE_SIZE;
-        for (String part : repositoryDescriptor.binaryManagerKey.split(",")) {
+        for (String part : binaryManagerDescriptor.key.split(",")) {
             if (part.startsWith(DS_PREFIX)) {
                 dataSourceName = part.substring(DS_PREFIX.length()).trim();
             }

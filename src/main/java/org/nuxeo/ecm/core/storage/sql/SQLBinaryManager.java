@@ -34,6 +34,7 @@ import javax.sql.DataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.binary.Binary;
@@ -57,7 +58,7 @@ import org.nuxeo.runtime.api.DataSourceHelper;
  * Because the BLOB length can be accessed independently of the binary stream,
  * it is also cached in a simple text file if accessed before the stream.
  */
-public class SQLBinaryManager extends CachingBinaryManager  {
+public class SQLBinaryManager extends CachingBinaryManager {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 

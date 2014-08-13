@@ -34,6 +34,7 @@ import javax.sql.DataSource;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.binary.Binary;
@@ -48,6 +49,7 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
 import org.nuxeo.runtime.api.DataSourceHelper;
+import org.nuxeo.runtime.api.Framework;
 
 /**
  * A Binary Manager that stores binaries as SQL BLOBs.
@@ -57,7 +59,7 @@ import org.nuxeo.runtime.api.DataSourceHelper;
  * Because the BLOB length can be accessed independently of the binary stream,
  * it is also cached in a simple text file if accessed before the stream.
  */
-public class SQLBinaryManager extends CachingBinaryManager  {
+public class SQLBinaryManager extends CachingBinaryManager {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 
@@ -147,7 +149,7 @@ public class SQLBinaryManager extends CachingBinaryManager  {
         File dir = File.createTempFile("nxbincache.", "", null);
         dir.delete();
         dir.mkdir();
-        dir.deleteOnExit();
+        Framework.trackFile(dir, dir);
         long cacheSize = SizeUtils.parseSizeInBytes(cacheSizeStr);
         initializeCache(dir, cacheSize, new SQLFileStorage());
         log.info("Using binary cache directory: " + dir.getPath() + " size: "

@@ -35,12 +35,10 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.nuxeo.common.utils.SizeUtils;
 import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.binary.Binary;
 import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
 import org.nuxeo.ecm.core.storage.binary.BinaryManagerDescriptor;
-import org.nuxeo.ecm.core.storage.binary.BinaryManagerRootDescriptor;
 import org.nuxeo.ecm.core.storage.binary.BinaryManagerStatus;
 import org.nuxeo.ecm.core.storage.binary.CachingBinaryManager;
 import org.nuxeo.ecm.core.storage.binary.FileStorage;
@@ -49,7 +47,6 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
 import org.nuxeo.runtime.api.DataSourceHelper;
-import org.nuxeo.runtime.api.Framework;
 
 /**
  * A Binary Manager that stores binaries as SQL BLOBs.
@@ -76,8 +73,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
     public static final String COL_BIN = "bin";
 
     public static final String COL_MARK = "mark"; // for mark & sweep GC
-
-    protected static final String LEN_DIGEST_SUFFIX = "-len";
 
     protected String dataSourceName;
 
@@ -106,11 +101,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
     @Override
     public void initialize(BinaryManagerDescriptor binaryManagerDescriptor)
             throws IOException {
-        repositoryName = binaryManagerDescriptor.repositoryName;
-        descriptor = new BinaryManagerRootDescriptor();
-        descriptor.digest = getDigest();
-        log.info("Repository '" + repositoryName + "' using "
-                + getClass().getSimpleName());
+        super.initialize(binaryManagerDescriptor);
 
         dataSourceName = null;
         String tableName = null;
@@ -146,15 +137,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         createSql(tableName);
 
         // create file cache
-        File dir = File.createTempFile("nxbincache.", "", null);
-        dir.delete();
-        dir.mkdir();
-        Framework.trackFile(dir, dir);
-        long cacheSize = SizeUtils.parseSizeInBytes(cacheSizeStr);
-        initializeCache(dir, cacheSize, new SQLFileStorage());
-        log.info("Using binary cache directory: " + dir.getPath() + " size: "
-                + cacheSizeStr);
-
+        initializeCache(cacheSizeStr, new SQLFileStorage());
         createGarbageCollector();
     }
 
@@ -214,13 +197,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 }
             }
         }
-    }
-
-    /**
-     * Gets the message digest to use to hash binaries.
-     */
-    protected String getDigest() {
-        return DEFAULT_DIGEST;
     }
 
     protected static void logSQL(String sql, Serializable... values) {
@@ -444,7 +420,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         @Override
         public void start() {
             if (startTime != 0) {
-                throw new RuntimeException("Alread started");
+                throw new RuntimeException("Already started");
             }
             startTime = System.currentTimeMillis();
             status = new BinaryManagerStatus();

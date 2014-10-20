@@ -50,7 +50,6 @@ import org.nuxeo.ecm.core.storage.binary.LazyBinary;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.datasource.DataSourceHelper;
-import org.nuxeo.runtime.jtajca.NuxeoContainer;
 
 /*
  * Note that this unit test cannot be run with Nuxeo 5.4.0 (NXP-6021 needed).
@@ -98,8 +97,6 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
                 String.format("OSGI-INF/datasource-%s-contrib.xml", db));
 
-        NuxeoContainer.install();
-
         fireFrameworkStarted();
         openSession();
 
@@ -139,6 +136,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
     @Override
     protected void deployRepositoryContrib() throws Exception {
+        deployBundle("org.nuxeo.runtime.jtajca");
         DatabaseHelper.setBinaryManager(SQLBinaryManager.class, "datasource="
                 + DATASOURCE + ",table=" + TABLE + ",cachesize=10MB");
         super.deployRepositoryContrib();
@@ -147,7 +145,6 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     @Override
     @After
     public void tearDown() throws Exception {
-        NuxeoContainer.uninstall();
         if (database instanceof DatabaseH2) {
             String url = Framework.getProperty(H2_URL_PROP);
             Connection connection = DriverManager.getConnection(url);

@@ -126,10 +126,8 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
             fail("Database " + database.getClass().getSimpleName() + " TODO");
             return;
         }
-        String sql = String.format(
-                "CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY, %s %s, %s %s)",
-                TABLE, SQLBinaryManager.COL_ID, size, SQLBinaryManager.COL_BIN,
-                blobType, SQLBinaryManager.COL_MARK, boolType);
+        String sql = String.format("CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY, %s %s, %s %s)", TABLE,
+                SQLBinaryManager.COL_ID, size, SQLBinaryManager.COL_BIN, blobType, SQLBinaryManager.COL_MARK, boolType);
         st.execute(sql);
         connection.close();
     }
@@ -137,8 +135,8 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     @Override
     protected void deployRepositoryContrib() throws Exception {
         deployBundle("org.nuxeo.runtime.jtajca");
-        DatabaseHelper.setBinaryManager(SQLBinaryManager.class, "datasource="
-                + DATASOURCE + ",table=" + TABLE + ",cachesize=10MB");
+        DatabaseHelper.setBinaryManager(SQLBinaryManager.class, "datasource=" + DATASOURCE + ",table=" + TABLE
+                + ",cachesize=10MB");
         super.deployRepositoryContrib();
     }
 
@@ -165,8 +163,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         session.save();
 
         byte[] bytes = CONTENT.getBytes("UTF-8");
-        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream",
-                "UTF-8");
+        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream", "UTF-8");
         blob.setFilename("blob.txt");
 
         file.setProperty("file", "content", blob);
@@ -210,8 +207,8 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         // pre-create value in table to force collision
         DataSource dataSource = DataSourceHelper.getDataSource(DATASOURCE);
         Connection connection = dataSource.getConnection();
-        String sql = String.format("INSERT INTO %s (%s, %s) VALUES (?, ?)",
-                TABLE, SQLBinaryManager.COL_ID, SQLBinaryManager.COL_BIN);
+        String sql = String.format("INSERT INTO %s (%s, %s) VALUES (?, ?)", TABLE, SQLBinaryManager.COL_ID,
+                SQLBinaryManager.COL_BIN);
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setString(1, CONTENT_MD5);
         ps.setBinaryStream(2, new ByteArrayInputStream(bytes), bytes.length);
@@ -221,8 +218,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         // don't do collision checks to provoke insert collision
         SQLBinaryManager.disableCheckExisting = true;
 
-        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream",
-                "UTF-8");
+        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream", "UTF-8");
         file.setProperty("file", "content", blob);
         session.saveDocument(file);
         session.save();
@@ -248,12 +244,10 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         assertEquals(CONTENT, IOUtils.toString(binary.getStream(), "UTF-8"));
 
         // another binary we'll keep
-        binaryManager.getBinary(new ByteArrayInputStream(
-                CONTENT2.getBytes("UTF-8")));
+        binaryManager.getBinary(new ByteArrayInputStream(CONTENT2.getBytes("UTF-8")));
 
         // another binary we'll GC
-        binaryManager.getBinary(new ByteArrayInputStream(
-                "abc".getBytes("UTF-8")));
+        binaryManager.getBinary(new ByteArrayInputStream("abc".getBytes("UTF-8")));
 
         // GC in non-delete mode
         BinaryGarbageCollector gc = binaryManager.getGarbageCollector();

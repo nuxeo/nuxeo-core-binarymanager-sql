@@ -52,8 +52,8 @@ import org.nuxeo.runtime.datasource.DataSourceHelper;
  * <p>
  * The BLOBs are cached locally on first access for efficiency.
  * <p>
- * Because the BLOB length can be accessed independently of the binary stream,
- * it is also cached in a simple text file if accessed before the stream.
+ * Because the BLOB length can be accessed independently of the binary stream, it is also cached in a simple text file
+ * if accessed before the stream.
  */
 public class SQLBinaryManager extends CachingBinaryManager {
 
@@ -98,8 +98,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
     protected static boolean resetCache; // for unit tests
 
     @Override
-    public void initialize(BinaryManagerDescriptor binaryManagerDescriptor)
-            throws IOException {
+    public void initialize(BinaryManagerDescriptor binaryManagerDescriptor) throws IOException {
         super.initialize(binaryManagerDescriptor);
 
         dataSourceName = null;
@@ -117,19 +116,16 @@ public class SQLBinaryManager extends CachingBinaryManager {
             }
         }
         if (dataSourceName == null) {
-            throw new RuntimeException("Missing " + DS_PREFIX
-                    + " in binaryManager key");
+            throw new RuntimeException("Missing " + DS_PREFIX + " in binaryManager key");
         }
         if (tableName == null) {
-            throw new RuntimeException("Missing " + TABLE_PREFIX
-                    + " in binaryManager key");
+            throw new RuntimeException("Missing " + TABLE_PREFIX + " in binaryManager key");
         }
 
         try {
             dataSource = DataSourceHelper.getDataSource(dataSourceName);
         } catch (NamingException e) {
-            throw new IOException("Cannot find datasource: " + dataSourceName,
-                    e);
+            throw new IOException("Cannot find datasource: " + dataSourceName, e);
         }
 
         // create the SQL statements used
@@ -153,29 +149,20 @@ public class SQLBinaryManager extends CachingBinaryManager {
         Column binCol = table.addColumn(COL_BIN, dummytype, COL_BIN, null);
         Column markCol = table.addColumn(COL_MARK, dummytype, COL_MARK, null);
 
-        checkSql = String.format("SELECT 1 FROM %s WHERE %s = ?",
-                table.getQuotedName(), idCol.getQuotedName());
-        putSql = String.format("INSERT INTO %s (%s, %s, %s) VALUES (?, ?, ?)",
-                table.getQuotedName(), idCol.getQuotedName(),
-                binCol.getQuotedName(), markCol.getQuotedName());
-        getSql = String.format("SELECT %s FROM %s WHERE %s = ?",
-                binCol.getQuotedName(), table.getQuotedName(),
+        checkSql = String.format("SELECT 1 FROM %s WHERE %s = ?", table.getQuotedName(), idCol.getQuotedName());
+        putSql = String.format("INSERT INTO %s (%s, %s, %s) VALUES (?, ?, ?)", table.getQuotedName(),
+                idCol.getQuotedName(), binCol.getQuotedName(), markCol.getQuotedName());
+        getSql = String.format("SELECT %s FROM %s WHERE %s = ?", binCol.getQuotedName(), table.getQuotedName(),
                 idCol.getQuotedName());
-        getLengthSql = String.format("SELECT %s(%s) FROM %s WHERE %s = ?",
-                dialect.getBlobLengthFunction(), binCol.getQuotedName(),
-                table.getQuotedName(), idCol.getQuotedName());
+        getLengthSql = String.format("SELECT %s(%s) FROM %s WHERE %s = ?", dialect.getBlobLengthFunction(),
+                binCol.getQuotedName(), table.getQuotedName(), idCol.getQuotedName());
 
-        gcStartSql = String.format("UPDATE %s SET %s = ?",
-                table.getQuotedName(), markCol.getQuotedName());
-        gcMarkSql = String.format("UPDATE %s SET %s = ? WHERE %s = ?",
-                table.getQuotedName(), markCol.getQuotedName(),
+        gcStartSql = String.format("UPDATE %s SET %s = ?", table.getQuotedName(), markCol.getQuotedName());
+        gcMarkSql = String.format("UPDATE %s SET %s = ? WHERE %s = ?", table.getQuotedName(), markCol.getQuotedName(),
                 idCol.getQuotedName());
-        gcStatsSql = String.format(
-                "SELECT COUNT(*), SUM(%s(%s)) FROM %s WHERE %s = ?",
-                dialect.getBlobLengthFunction(), binCol.getQuotedName(),
-                table.getQuotedName(), markCol.getQuotedName());
-        gcSweepSql = String.format("DELETE FROM %s WHERE %s = ?",
-                table.getQuotedName(), markCol.getQuotedName());
+        gcStatsSql = String.format("SELECT COUNT(*), SUM(%s(%s)) FROM %s WHERE %s = ?",
+                dialect.getBlobLengthFunction(), binCol.getQuotedName(), table.getQuotedName(), markCol.getQuotedName());
+        gcSweepSql = String.format("DELETE FROM %s WHERE %s = ?", table.getQuotedName(), markCol.getQuotedName());
     }
 
     protected Dialect getDialect() throws IOException {
@@ -387,8 +374,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         }
     }
 
-    public static class SQLBinaryGarbageCollector implements
-            BinaryGarbageCollector {
+    public static class SQLBinaryGarbageCollector implements BinaryGarbageCollector {
 
         protected final SQLBinaryManager binaryManager;
 
@@ -502,16 +488,14 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 rs.next();
                 status.numBinaries = rs.getLong(1);
                 status.sizeBinaries = rs.getLong(2);
-                logSQL("  -> ?, ?", Long.valueOf(status.numBinaries),
-                        Long.valueOf(status.sizeBinaries));
+                logSQL("  -> ?, ?", Long.valueOf(status.numBinaries), Long.valueOf(status.sizeBinaries));
                 logSQL(binaryManager.gcStatsSql, Boolean.FALSE);
                 ps.setBoolean(1, false); // unmarked
                 rs = ps.executeQuery();
                 rs.next();
                 status.numBinariesGC = rs.getLong(1);
                 status.sizeBinariesGC = rs.getLong(2);
-                logSQL("  -> ?, ?", Long.valueOf(status.numBinariesGC),
-                        Long.valueOf(status.sizeBinariesGC));
+                logSQL("  -> ?, ?", Long.valueOf(status.numBinariesGC), Long.valueOf(status.sizeBinariesGC));
                 if (delete) {
                     // sweep
                     ps.close();

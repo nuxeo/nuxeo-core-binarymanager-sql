@@ -40,7 +40,7 @@ import org.junit.Test;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
-import org.nuxeo.ecm.core.api.impl.blob.ByteArrayBlob;
+import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
 import org.nuxeo.ecm.core.storage.StorageBlob;
 import org.nuxeo.ecm.core.storage.binary.Binary;
 import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
@@ -163,7 +163,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         session.save();
 
         byte[] bytes = CONTENT.getBytes("UTF-8");
-        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream", "UTF-8");
+        Blob blob = new StringBlob(CONTENT, "application/octet-stream");
         blob.setFilename("blob.txt");
 
         file.setProperty("file", "content", blob);
@@ -218,7 +218,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         // don't do collision checks to provoke insert collision
         SQLBinaryManager.disableCheckExisting = true;
 
-        Blob blob = new ByteArrayBlob(bytes, "application/octet-stream", "UTF-8");
+        Blob blob = new StringBlob(CONTENT, "application/octet-stream");
         file.setProperty("file", "content", blob);
         session.saveDocument(file);
         session.save();

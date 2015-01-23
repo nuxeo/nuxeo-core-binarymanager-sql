@@ -193,7 +193,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         openSession();
         file = session.getDocument(file.getRef());
         StorageBlob b = (StorageBlob) file.getPropertyValue("file:content");
-        assertNotNull(b.getBinary().getStreamSource().getLength());
+        assertNotNull(b.getBinary().getFile());
     }
 
     @Test

@@ -38,6 +38,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.nuxeo.ecm.core.api.Blob;
+import org.nuxeo.ecm.core.api.Blobs;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
@@ -234,7 +235,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
         // store binary
         byte[] bytes = CONTENT.getBytes("UTF-8");
-        binary = binaryManager.getBinary(new ByteArrayInputStream(bytes));
+        binary = binaryManager.getBinary(Blobs.createBlob(CONTENT));
         assertNotNull(binary);
 
         // get binary
@@ -244,10 +245,10 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         assertEquals(CONTENT, IOUtils.toString(binary.getStream(), "UTF-8"));
 
         // another binary we'll keep
-        binaryManager.getBinary(new ByteArrayInputStream(CONTENT2.getBytes("UTF-8")));
+        binaryManager.getBinary(Blobs.createBlob(CONTENT2));
 
         // another binary we'll GC
-        binaryManager.getBinary(new ByteArrayInputStream("abc".getBytes("UTF-8")));
+        binaryManager.getBinary(Blobs.createBlob("abc"));
 
         // GC in non-delete mode
         BinaryGarbageCollector gc = binaryManager.getGarbageCollector();

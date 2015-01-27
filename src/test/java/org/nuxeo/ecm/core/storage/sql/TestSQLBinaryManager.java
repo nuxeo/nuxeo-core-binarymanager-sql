@@ -42,7 +42,6 @@ import org.nuxeo.ecm.core.api.Blobs;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
-import org.nuxeo.ecm.core.storage.StorageBlob;
 import org.nuxeo.ecm.core.storage.binary.Binary;
 import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
 import org.nuxeo.ecm.core.storage.binary.BinaryManagerService;
@@ -193,8 +192,8 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         closeSession();
         openSession();
         file = session.getDocument(file.getRef());
-        StorageBlob b = (StorageBlob) file.getPropertyValue("file:content");
-        assertNotNull(b.getBinary().getFile());
+        Blob b = (Blob) file.getPropertyValue("file:content");
+        assertNotNull(b.getFile());
     }
 
     @Test

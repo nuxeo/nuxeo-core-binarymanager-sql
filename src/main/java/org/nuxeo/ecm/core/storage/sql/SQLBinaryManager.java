@@ -169,7 +169,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         Connection connection = null;
         try {
             connection = dataSource.getConnection();
-            return Dialect.createDialect(connection, null, null);
+            return Dialect.createDialect(connection, null);
         } catch (StorageException e) {
             throw new IOException(e);
         } catch (SQLException e) {

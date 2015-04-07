@@ -79,12 +79,9 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        String db = database.getClass().getSimpleName().toLowerCase();
-        if (db.startsWith("database")) {
-            db = db.substring("database".length());
-        }
+        String db = database.getVCSName().toLowerCase();
 
-        if (database instanceof DatabaseH2) {
+        if (database.isVCSH2()) {
             File h2dir = new File(H2_DIR);
             FileUtils.deleteDirectory(h2dir);
             h2dir.mkdirs();
@@ -107,19 +104,19 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
         String blobType;
         String boolType;
         int size = 40; // max size for MD5 and SHA-256 hash
-        if (database instanceof DatabaseH2) {
+        if (database.isVCSH2()) {
             blobType = "BLOB";
             boolType = "BOOLEAN";
-        } else if (database instanceof DatabasePostgreSQL) {
+        } else if (database.isVCSPostgreSQL()) {
             blobType = "BYTEA";
             boolType = "BOOL";
-        } else if (database instanceof DatabaseMySQL) {
+        } else if (database.isVCSMySQL()) {
             blobType = "BLOB";
             boolType = "BIT";
-        } else if (database instanceof DatabaseOracle) {
+        } else if (database.isVCSOracle()) {
             blobType = "BLOB";
             boolType = "NUMBER(1,0)";
-        } else if (database instanceof DatabaseSQLServer) {
+        } else if (database.isVCSSQLServer()) {
             blobType = "VARBINARY(MAX)";
             boolType = "BIT";
         } else {
@@ -143,7 +140,7 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
     @Override
     @After
     public void tearDown() throws Exception {
-        if (database instanceof DatabaseH2) {
+        if (database.isVCSH2()) {
             String url = Framework.getProperty(H2_URL_PROP);
             Connection connection = DriverManager.getConnection(url);
             Statement st = connection.createStatement();

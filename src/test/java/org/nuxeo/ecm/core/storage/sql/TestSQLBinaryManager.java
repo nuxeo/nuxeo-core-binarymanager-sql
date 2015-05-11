@@ -42,11 +42,12 @@ import org.nuxeo.ecm.core.api.Blobs;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
-import org.nuxeo.ecm.core.storage.binary.Binary;
-import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
-import org.nuxeo.ecm.core.storage.binary.BinaryManagerService;
-import org.nuxeo.ecm.core.storage.binary.BinaryManagerStatus;
-import org.nuxeo.ecm.core.storage.binary.LazyBinary;
+import org.nuxeo.ecm.core.blob.BlobManager;
+import org.nuxeo.ecm.core.blob.binary.Binary;
+import org.nuxeo.ecm.core.blob.binary.BinaryBlobProvider;
+import org.nuxeo.ecm.core.blob.binary.BinaryGarbageCollector;
+import org.nuxeo.ecm.core.blob.binary.BinaryManagerStatus;
+import org.nuxeo.ecm.core.blob.binary.LazyBinary;
 import org.nuxeo.runtime.AbstractRuntimeService;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.datasource.DataSourceHelper;
@@ -223,8 +224,9 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
     @Test
     public void testSQLBinaryManagerGC() throws Exception {
-        BinaryManagerService bms = Framework.getLocalService(BinaryManagerService.class);
-        SQLBinaryManager binaryManager = (SQLBinaryManager) bms.getBinaryManager("test");
+        BlobManager blobManager = Framework.getService(BlobManager.class);
+        BinaryBlobProvider bbp = (BinaryBlobProvider) blobManager.getBlobProvider("test");
+        SQLBinaryManager binaryManager = (SQLBinaryManager) bbp.getBinaryManager();
 
         Binary binary = binaryManager.getBinary(CONTENT_MD5);
         assertTrue(binary instanceof LazyBinary);

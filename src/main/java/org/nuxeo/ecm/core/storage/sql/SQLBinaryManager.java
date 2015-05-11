@@ -27,20 +27,22 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Map;
 
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.nuxeo.ecm.core.blob.binary.Binary;
+import org.nuxeo.ecm.core.blob.binary.BinaryGarbageCollector;
+import org.nuxeo.ecm.core.blob.binary.BinaryManager;
+import org.nuxeo.ecm.core.blob.binary.BinaryManagerStatus;
+import org.nuxeo.ecm.core.blob.binary.CachingBinaryManager;
+import org.nuxeo.ecm.core.blob.binary.FileStorage;
 import org.nuxeo.ecm.core.storage.StorageException;
-import org.nuxeo.ecm.core.storage.binary.Binary;
-import org.nuxeo.ecm.core.storage.binary.BinaryGarbageCollector;
-import org.nuxeo.ecm.core.storage.binary.BinaryManagerDescriptor;
-import org.nuxeo.ecm.core.storage.binary.BinaryManagerStatus;
-import org.nuxeo.ecm.core.storage.binary.CachingBinaryManager;
-import org.nuxeo.ecm.core.storage.binary.FileStorage;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
@@ -59,9 +61,15 @@ public class SQLBinaryManager extends CachingBinaryManager {
 
     private static final Log log = LogFactory.getLog(SQLBinaryManager.class);
 
+    public static final String DS_PROP = "datasource";
+
     public static final String DS_PREFIX = "datasource=";
 
+    public static final String TABLE_PROP = "table";
+
     public static final String TABLE_PREFIX = "table=";
+
+    public static final String CACHE_SIZE_PROP = "cacheSize";
 
     public static final String CACHE_SIZE_PREFIX = "cachesize=";
 
@@ -98,13 +106,15 @@ public class SQLBinaryManager extends CachingBinaryManager {
     protected static boolean resetCache; // for unit tests
 
     @Override
-    public void initialize(BinaryManagerDescriptor binaryManagerDescriptor) throws IOException {
-        super.initialize(binaryManagerDescriptor);
+    public void initialize(String blobProviderId, Map<String, String> properties) throws IOException {
+        super.initialize(blobProviderId, properties);
 
         dataSourceName = null;
         String tableName = null;
-        String cacheSizeStr = DEFAULT_CACHE_SIZE;
-        for (String part : binaryManagerDescriptor.key.split(",")) {
+        String cacheSizeStr = null;
+        String key = properties.get(BinaryManager.PROP_KEY);
+        key = StringUtils.defaultIfBlank(key, "");
+        for (String part : key.split(",")) {
             if (part.startsWith(DS_PREFIX)) {
                 dataSourceName = part.substring(DS_PREFIX.length()).trim();
             }
@@ -115,11 +125,23 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 cacheSizeStr = part.substring(CACHE_SIZE_PREFIX.length()).trim();
             }
         }
-        if (dataSourceName == null) {
-            throw new RuntimeException("Missing " + DS_PREFIX + " in binaryManager key");
+        if (StringUtils.isBlank(dataSourceName)) {
+            dataSourceName = properties.get(DS_PROP);
+            if (StringUtils.isBlank(dataSourceName)) {
+                throw new RuntimeException("Missing " + DS_PROP + " in binaryManager configuration");
+            }
         }
-        if (tableName == null) {
-            throw new RuntimeException("Missing " + TABLE_PREFIX + " in binaryManager key");
+        if (StringUtils.isBlank(tableName)) {
+            tableName = properties.get(TABLE_PROP);
+            if (StringUtils.isBlank(tableName)) {
+                throw new RuntimeException("Missing " + TABLE_PROP + " in binaryManager configuration");
+            }
+        }
+        if (StringUtils.isBlank(cacheSizeStr)) {
+            cacheSizeStr = properties.get(CACHE_SIZE_PROP);
+            if (StringUtils.isBlank(cacheSizeStr)) {
+                cacheSizeStr = DEFAULT_CACHE_SIZE;
+            }
         }
 
         try {
@@ -160,8 +182,8 @@ public class SQLBinaryManager extends CachingBinaryManager {
         gcStartSql = String.format("UPDATE %s SET %s = ?", table.getQuotedName(), markCol.getQuotedName());
         gcMarkSql = String.format("UPDATE %s SET %s = ? WHERE %s = ?", table.getQuotedName(), markCol.getQuotedName(),
                 idCol.getQuotedName());
-        gcStatsSql = String.format("SELECT COUNT(*), SUM(%s(%s)) FROM %s WHERE %s = ?",
-                dialect.getBlobLengthFunction(), binCol.getQuotedName(), table.getQuotedName(), markCol.getQuotedName());
+        gcStatsSql = String.format("SELECT COUNT(*), SUM(%s(%s)) FROM %s WHERE %s = ?", dialect.getBlobLengthFunction(),
+                binCol.getQuotedName(), table.getQuotedName(), markCol.getQuotedName());
         gcSweepSql = String.format("DELETE FROM %s WHERE %s = ?", table.getQuotedName(), markCol.getQuotedName());
     }
 

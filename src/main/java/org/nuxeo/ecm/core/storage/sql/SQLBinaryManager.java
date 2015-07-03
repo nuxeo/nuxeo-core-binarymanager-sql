@@ -42,7 +42,6 @@ import org.nuxeo.ecm.core.blob.binary.BinaryManager;
 import org.nuxeo.ecm.core.blob.binary.BinaryManagerStatus;
 import org.nuxeo.ecm.core.blob.binary.CachingBinaryManager;
 import org.nuxeo.ecm.core.blob.binary.FileStorage;
-import org.nuxeo.ecm.core.storage.StorageException;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
@@ -192,8 +191,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
         try {
             connection = dataSource.getConnection();
             return Dialect.createDialect(connection, null);
-        } catch (StorageException e) {
-            throw new IOException(e);
         } catch (SQLException e) {
             throw new IOException(e);
         } finally {

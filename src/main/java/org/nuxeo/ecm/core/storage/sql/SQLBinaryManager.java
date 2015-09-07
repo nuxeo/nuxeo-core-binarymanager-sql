@@ -46,6 +46,7 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Column;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
+import org.nuxeo.runtime.datasource.ConnectionHelper;
 import org.nuxeo.runtime.datasource.DataSourceHelper;
 
 /**
@@ -81,8 +82,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
     public static final String COL_MARK = "mark"; // for mark & sweep GC
 
     protected String dataSourceName;
-
-    protected DataSource dataSource;
 
     protected String checkSql;
 
@@ -143,12 +142,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
             }
         }
 
-        try {
-            dataSource = DataSourceHelper.getDataSource(dataSourceName);
-        } catch (NamingException e) {
-            throw new IOException("Cannot find datasource: " + dataSourceName, e);
-        }
-
         // create the SQL statements used
         createSql(tableName);
 
@@ -189,7 +182,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
     protected Dialect getDialect() throws IOException {
         Connection connection = null;
         try {
-            connection = dataSource.getConnection();
+            connection = getConnection();
             return Dialect.createDialect(connection, null);
         } catch (SQLException e) {
             throw new IOException(e);
@@ -202,6 +195,10 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 }
             }
         }
+    }
+
+    protected Connection getConnection() throws SQLException {
+        return ConnectionHelper.getConnection(dataSourceName);
     }
 
     protected static void logSQL(String sql, Serializable... values) {
@@ -248,6 +245,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
             return true;
         }
         if ("23505".equals(sqlState)) {
+            // H2: Unique index or primary key violation
             // PostgreSQL: duplicate key value violates unique constraint
             return true;
         }
@@ -269,13 +267,23 @@ public class SQLBinaryManager extends CachingBinaryManager {
         return super.getBinary(digest);
     }
 
+    @Override
+    public Binary getBinary(InputStream in) throws IOException {
+        if (resetCache) {
+            // for unit tests
+            resetCache = false;
+            fileCache.clear();
+        }
+        return super.getBinary(in);
+    }
+
     public class SQLFileStorage implements FileStorage {
 
         @Override
         public void storeFile(String digest, File file) throws IOException {
             Connection connection = null;
             try {
-                connection = dataSource.getConnection();
+                connection = getConnection();
                 boolean existing;
                 if (disableCheckExisting) {
                     // for unit tests
@@ -328,7 +336,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         public boolean fetchFile(String digest, File tmp) throws IOException {
             Connection connection = null;
             try {
-                connection = dataSource.getConnection();
+                connection = getConnection();
                 logSQL(getSql, digest);
                 PreparedStatement ps = connection.prepareStatement(getSql);
                 ps.setString(1, digest);
@@ -369,7 +377,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
         public Long fetchLength(String digest) throws IOException {
             Connection connection = null;
             try {
-                connection = dataSource.getConnection();
+                connection = getConnection();
                 logSQL(getLengthSql, digest);
                 PreparedStatement ps = connection.prepareStatement(getLengthSql);
                 ps.setString(1, digest);
@@ -432,7 +440,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
             Connection connection = null;
             PreparedStatement ps = null;
             try {
-                connection = binaryManager.dataSource.getConnection();
+                connection = binaryManager.getConnection();
                 logSQL(binaryManager.gcStartSql, Boolean.FALSE);
                 ps = connection.prepareStatement(binaryManager.gcStartSql);
                 ps.setBoolean(1, false); // clear marks
@@ -463,7 +471,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
             Connection connection = null;
             PreparedStatement ps = null;
             try {
-                connection = binaryManager.dataSource.getConnection();
+                connection = binaryManager.getConnection();
                 logSQL(binaryManager.gcMarkSql, Boolean.TRUE, digest);
                 ps = connection.prepareStatement(binaryManager.gcMarkSql);
                 ps.setBoolean(1, true); // mark
@@ -498,7 +506,7 @@ public class SQLBinaryManager extends CachingBinaryManager {
             Connection connection = null;
             PreparedStatement ps = null;
             try {
-                connection = binaryManager.dataSource.getConnection();
+                connection = binaryManager.getConnection();
                 // stats
                 logSQL(binaryManager.gcStatsSql, Boolean.TRUE);
                 ps = connection.prepareStatement(binaryManager.gcStatsSql);

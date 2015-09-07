@@ -21,41 +21,42 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
+import java.io.InputStream;
 import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-import javax.sql.DataSource;
+import javax.inject.Inject;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.Blobs;
-import org.nuxeo.ecm.core.api.DocumentModel;
-import org.nuxeo.ecm.core.api.impl.DocumentModelImpl;
 import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
-import org.nuxeo.ecm.core.blob.BlobManager;
 import org.nuxeo.ecm.core.blob.binary.Binary;
-import org.nuxeo.ecm.core.blob.binary.BinaryBlobProvider;
 import org.nuxeo.ecm.core.blob.binary.BinaryGarbageCollector;
 import org.nuxeo.ecm.core.blob.binary.BinaryManagerStatus;
 import org.nuxeo.ecm.core.blob.binary.LazyBinary;
-import org.nuxeo.runtime.AbstractRuntimeService;
+import org.nuxeo.ecm.core.test.CoreFeature;
+import org.nuxeo.ecm.core.test.StorageConfiguration;
 import org.nuxeo.runtime.api.Framework;
-import org.nuxeo.runtime.datasource.DataSourceHelper;
+import org.nuxeo.runtime.datasource.ConnectionHelper;
+import org.nuxeo.runtime.test.runner.Features;
+import org.nuxeo.runtime.test.runner.FeaturesRunner;
 
 /*
  * Note that this unit test cannot be run with Nuxeo 5.4.0 (NXP-6021 needed).
  */
-public class TestSQLBinaryManager extends SQLRepositoryTestCase {
+@RunWith(FeaturesRunner.class)
+@Features(CoreFeature.class)
+public class TestSQLBinaryManager {
 
     private static final String CONTENT = "this is a file au caf\u00e9";
 
@@ -65,169 +66,108 @@ public class TestSQLBinaryManager extends SQLRepositoryTestCase {
 
     private static final String CONTENT2_MD5 = "025e4da7edac35ede583f5e8d51aa7ec";
 
-    /** This directory will be deleted and recreated. */
-    private static final String H2_DIR = "target/test/h2-ds";
-
-    /** Property used in the datasource URL. */
-    private static final String H2_URL_PROP = "nuxeo.test.ds.url";
-
-    // also in datasource-*-contrib.xml
-    public static final String DATASOURCE = "jdbc/binaries";
-
     public static final String TABLE = "binaries";
 
-    @Override
+    @Inject
+    protected CoreFeature coreFeature;
+
+    protected SQLBinaryManager binaryManager;
+
     @Before
     public void setUp() throws Exception {
-        super.setUp();
-        String db = database.getVCSName().toLowerCase();
+        StorageConfiguration database = coreFeature.getStorageConfiguration();
+        assumeTrue(database.isVCS());
 
-        if (database.isVCSH2()) {
-            File h2dir = new File(H2_DIR);
-            FileUtils.deleteDirectory(h2dir);
-            h2dir.mkdirs();
-            File h2db = new File(h2dir, "binaries");
-            String h2Url = "jdbc:h2:" + h2db.getAbsolutePath();
-            ((AbstractRuntimeService) runtime).setProperty(H2_URL_PROP, h2Url);
-        }
-        deployBundle("org.nuxeo.runtime.datasource");
-        deployBundle("org.nuxeo.runtime.jtajca");
-        deployContrib("org.nuxeo.ecm.core.storage.binarymanager.sql.tests",
-                String.format("OSGI-INF/datasource-%s-contrib.xml", db));
-
-        fireFrameworkStarted();
-        openSession();
+        // use singleds to be able to get a connection easily
+        Framework.getProperties().setProperty(ConnectionHelper.SINGLE_DS, "jdbc/NuxeoTestDS");
 
         // create table in database
-        DataSource dataSource = DataSourceHelper.getDataSource(DATASOURCE);
-        Connection connection = dataSource.getConnection();
-        Statement st = connection.createStatement();
-        String blobType;
-        String boolType;
-        int size = 40; // max size for MD5 and SHA-256 hash
-        if (database.isVCSH2()) {
-            blobType = "BLOB";
-            boolType = "BOOLEAN";
-        } else if (database.isVCSPostgreSQL()) {
-            blobType = "BYTEA";
-            boolType = "BOOL";
-        } else if (database.isVCSMySQL()) {
-            blobType = "BLOB";
-            boolType = "BIT";
-        } else if (database.isVCSOracle()) {
-            blobType = "BLOB";
-            boolType = "NUMBER(1,0)";
-        } else if (database.isVCSSQLServer()) {
-            blobType = "VARBINARY(MAX)";
-            boolType = "BIT";
-        } else {
-            fail("Database " + database.getClass().getSimpleName() + " TODO");
-            return;
+        try (Connection connection = ConnectionHelper.getConnection(null)) {
+            try (Statement st = connection.createStatement()) {
+                String blobType;
+                String boolType;
+                int size = 40; // max size for MD5 and SHA-256 hash
+                if (database.isVCSH2()) {
+                    blobType = "BLOB";
+                    boolType = "BOOLEAN";
+                } else if (database.isVCSPostgreSQL()) {
+                    blobType = "BYTEA";
+                    boolType = "BOOL";
+                } else if (database.isVCSMySQL()) {
+                    blobType = "BLOB";
+                    boolType = "BIT";
+                } else if (database.isVCSOracle()) {
+                    blobType = "BLOB";
+                    boolType = "NUMBER(1,0)";
+                } else if (database.isVCSSQLServer()) {
+                    blobType = "VARBINARY(MAX)";
+                    boolType = "BIT";
+                } else {
+                    fail("Database " + database.getClass().getSimpleName() + " TODO");
+                    return;
+                }
+                String sql = String.format("CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY, %s %s, %s %s)", TABLE,
+                        SQLBinaryManager.COL_ID, Integer.valueOf(size), SQLBinaryManager.COL_BIN, blobType,
+                        SQLBinaryManager.COL_MARK, boolType);
+                st.execute(sql);
+            }
         }
-        String sql = String.format("CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY, %s %s, %s %s)", TABLE,
-                SQLBinaryManager.COL_ID, size, SQLBinaryManager.COL_BIN, blobType, SQLBinaryManager.COL_MARK, boolType);
-        st.execute(sql);
-        connection.close();
+
+        // create binary manager
+        binaryManager = new SQLBinaryManager();
+        Map<String, String> properties = new HashMap<>();
+        // ds name doesn't matter in single-connection mode
+        properties.put(SQLBinaryManager.DS_PROP, "jdbc/NuxeoTestDS");
+        properties.put(SQLBinaryManager.TABLE_PROP, TABLE);
+        properties.put(SQLBinaryManager.CACHE_SIZE_PROP, "10MB");
+        binaryManager.initialize("sql", properties);
     }
 
-    @Override
-    protected void deployRepositoryContrib() throws Exception {
-        deployBundle("org.nuxeo.runtime.jtajca");
-        DatabaseHelper.setBinaryManager(SQLBinaryManager.class, "datasource=" + DATASOURCE + ",table=" + TABLE
-                + ",cachesize=10MB");
-        super.deployRepositoryContrib();
-    }
-
-    @Override
     @After
-    public void tearDown() throws Exception {
-        if (database.isVCSH2()) {
-            String url = Framework.getProperty(H2_URL_PROP);
-            Connection connection = DriverManager.getConnection(url);
-            Statement st = connection.createStatement();
-            st.execute("SHUTDOWN");
-            st.close();
-            connection.close();
+    public void tearDown() throws SQLException {
+        try (Connection connection = ConnectionHelper.getConnection(null)) {
+            try (Statement st = connection.createStatement()) {
+                String sql = String.format("DROP TABLE %s", TABLE);
+                st.execute(sql);
+            }
         }
-        session.cancel();
-        closeSession();
-        super.tearDown();
     }
 
     @Test
     public void testSQLBinaryManager() throws Exception {
-        DocumentModel file = new DocumentModelImpl("/", "myfile", "File");
-        file = session.createDocument(file);
-        session.save();
-
-        byte[] bytes = CONTENT.getBytes("UTF-8");
+        // write to database
         Blob blob = new StringBlob(CONTENT, "application/octet-stream");
-        blob.setFilename("blob.txt");
+        Binary binary = binaryManager.getBinary(blob);
+        assertEquals(23, binary.getLength());
+        try (InputStream is = binary.getStream()) {
+            assertEquals(CONTENT, IOUtils.toString(is, "UTF-8"));
+        }
 
-        file.setProperty("file", "content", blob);
-        session.saveDocument(file);
-        session.save();
-
-        file = session.getDocument(file.getRef());
-        blob = (Blob) file.getPropertyValue("file:content");
-
-        assertEquals("blob.txt", blob.getFilename());
-        assertEquals(bytes.length, blob.getLength());
-        assertTrue(Arrays.equals(bytes, blob.getByteArray()));
-
-        // actually fetch from database
-        SQLBinaryManager.resetCache = true;
-        closeSession();
-        openSession();
-        file = session.getDocument(file.getRef());
-        blob = (Blob) file.getPropertyValue("file:content");
-        // check length first, uses a specific LENGTH query
-        assertEquals(bytes.length, blob.getLength());
-        assertEquals("blob.txt", blob.getFilename());
-        assertTrue(Arrays.equals(bytes, blob.getByteArray()));
-
-        SQLBinaryManager.resetCache = true;
-        closeSession();
-        openSession();
-        file = session.getDocument(file.getRef());
-        Blob b = (Blob) file.getPropertyValue("file:content");
-        assertNotNull(b.getFile());
+        // read from database
+        Binary binary2 = binaryManager.getBinary(binary.getDigest());
+        assertNotNull(binary2);
+        assertEquals(23, binary2.getLength());
+        try (InputStream is = binary2.getStream()) {
+            assertEquals(CONTENT, IOUtils.toString(is, "UTF-8"));
+        }
     }
 
     @Test
     public void testSQLBinaryManagerDuplicate() throws Exception {
-        DocumentModel file = new DocumentModelImpl("/", "myfile", "File");
-        file = session.createDocument(file);
-        session.save();
-
-        byte[] bytes = CONTENT.getBytes("UTF-8");
-
-        // pre-create value in table to force collision
-        DataSource dataSource = DataSourceHelper.getDataSource(DATASOURCE);
-        Connection connection = dataSource.getConnection();
-        String sql = String.format("INSERT INTO %s (%s, %s) VALUES (?, ?)", TABLE, SQLBinaryManager.COL_ID,
-                SQLBinaryManager.COL_BIN);
-        PreparedStatement ps = connection.prepareStatement(sql);
-        ps.setString(1, CONTENT_MD5);
-        ps.setBinaryStream(2, new ByteArrayInputStream(bytes), bytes.length);
-        ps.execute();
-        connection.close();
+        Blob blob = new StringBlob(CONTENT, "application/octet-stream");
+        binaryManager.getBinary(blob);
 
         // don't do collision checks to provoke insert collision
         SQLBinaryManager.disableCheckExisting = true;
+        // and don't hit cache
+        SQLBinaryManager.resetCache = true;
 
-        Blob blob = new StringBlob(CONTENT, "application/octet-stream");
-        file.setProperty("file", "content", blob);
-        session.saveDocument(file);
-        session.save();
+        // store again, shouldn't fail (collision detected)
+        binaryManager.getBinary(blob);
     }
 
     @Test
     public void testSQLBinaryManagerGC() throws Exception {
-        BlobManager blobManager = Framework.getService(BlobManager.class);
-        BinaryBlobProvider bbp = (BinaryBlobProvider) blobManager.getBlobProvider("test");
-        SQLBinaryManager binaryManager = (SQLBinaryManager) bbp.getBinaryManager();
-
         Binary binary = binaryManager.getBinary(CONTENT_MD5);
         assertTrue(binary instanceof LazyBinary);
 

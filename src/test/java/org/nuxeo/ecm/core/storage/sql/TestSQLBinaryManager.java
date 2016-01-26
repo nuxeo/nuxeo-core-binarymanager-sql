@@ -125,6 +125,10 @@ public class TestSQLBinaryManager {
 
     @After
     public void tearDown() throws SQLException {
+        if (binaryManager == null) {
+            // not initialized, not VCS
+            return;
+        }
         try (Connection connection = ConnectionHelper.getConnection(null)) {
             try (Statement st = connection.createStatement()) {
                 String sql = String.format("DROP TABLE %s", TABLE);

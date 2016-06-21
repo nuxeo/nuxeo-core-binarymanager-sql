@@ -144,7 +144,6 @@ public class TestSQLBinaryManager {
         // write to database
         Blob blob = new StringBlob(CONTENT, "application/octet-stream");
         Binary binary = binaryManager.getBinary(blob);
-        assertEquals(23, binary.getLength());
         try (InputStream is = binary.getStream()) {
             assertEquals(CONTENT, IOUtils.toString(is, "UTF-8"));
         }
@@ -152,7 +151,6 @@ public class TestSQLBinaryManager {
         // read from database
         Binary binary2 = binaryManager.getBinary(binary.getDigest());
         assertNotNull(binary2);
-        assertEquals(23, binary2.getLength());
         try (InputStream is = binary2.getStream()) {
             assertEquals(CONTENT, IOUtils.toString(is, "UTF-8"));
         }
@@ -185,7 +183,6 @@ public class TestSQLBinaryManager {
         // get binary
         binary = binaryManager.getBinary(CONTENT_MD5);
         assertNotNull(binary);
-        assertEquals(bytes.length, binary.getLength());
         assertEquals(CONTENT, IOUtils.toString(binary.getStream(), "UTF-8"));
 
         // another binary we'll keep

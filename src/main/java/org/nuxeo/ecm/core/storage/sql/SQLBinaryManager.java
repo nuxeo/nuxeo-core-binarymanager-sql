@@ -31,9 +31,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
-import javax.naming.NamingException;
-import javax.sql.DataSource;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -49,7 +46,6 @@ import org.nuxeo.ecm.core.storage.sql.jdbc.db.Database;
 import org.nuxeo.ecm.core.storage.sql.jdbc.db.Table;
 import org.nuxeo.ecm.core.storage.sql.jdbc.dialect.Dialect;
 import org.nuxeo.runtime.datasource.ConnectionHelper;
-import org.nuxeo.runtime.datasource.DataSourceHelper;
 
 /**
  * A Binary Manager that stores binaries as SQL BLOBs.
@@ -90,8 +86,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
     protected String putSql;
 
     protected String getSql;
-
-    protected String getLengthSql;
 
     protected String gcStartSql;
 
@@ -170,8 +164,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 idCol.getQuotedName(), binCol.getQuotedName(), markCol.getQuotedName());
         getSql = String.format("SELECT %s FROM %s WHERE %s = ?", binCol.getQuotedName(), table.getQuotedName(),
                 idCol.getQuotedName());
-        getLengthSql = String.format("SELECT %s(%s) FROM %s WHERE %s = ?", dialect.getBlobLengthFunction(),
-                binCol.getQuotedName(), table.getQuotedName(), idCol.getQuotedName());
 
         gcStartSql = String.format("UPDATE %s SET %s = ?", table.getQuotedName(), markCol.getQuotedName());
         gcMarkSql = String.format("UPDATE %s SET %s = ? WHERE %s = ?", table.getQuotedName(), markCol.getQuotedName(),
@@ -362,33 +354,6 @@ public class SQLBinaryManager extends CachingBinaryManager {
                     IOUtils.closeQuietly(out);
                 }
                 return true;
-            } catch (SQLException e) {
-                throw new IOException(e);
-            } finally {
-                if (connection != null) {
-                    try {
-                        connection.close();
-                    } catch (SQLException e) {
-                        log.error(e, e);
-                    }
-                }
-            }
-        }
-
-        @Override
-        public Long fetchLength(String digest) throws IOException {
-            Connection connection = null;
-            try {
-                connection = getConnection();
-                logSQL(getLengthSql, digest);
-                PreparedStatement ps = connection.prepareStatement(getLengthSql);
-                ps.setString(1, digest);
-                ResultSet rs = ps.executeQuery();
-                if (!rs.next()) {
-                    log.error("Unknown binary: " + digest);
-                    return null;
-                }
-                return Long.valueOf(rs.getLong(1));
             } catch (SQLException e) {
                 throw new IOException(e);
             } finally {

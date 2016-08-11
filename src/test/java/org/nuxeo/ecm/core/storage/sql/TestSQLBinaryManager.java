@@ -46,9 +46,9 @@ import org.nuxeo.ecm.core.blob.binary.Binary;
 import org.nuxeo.ecm.core.blob.binary.BinaryGarbageCollector;
 import org.nuxeo.ecm.core.blob.binary.BinaryManagerStatus;
 import org.nuxeo.ecm.core.blob.binary.LazyBinary;
+import org.nuxeo.ecm.core.storage.sql.jdbc.JDBCConnection;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.ecm.core.test.StorageConfiguration;
-import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.datasource.ConnectionHelper;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
@@ -80,11 +80,9 @@ public class TestSQLBinaryManager {
         StorageConfiguration database = coreFeature.getStorageConfiguration();
         assumeTrue(database.isVCS());
 
-        // use singleds to be able to get a connection easily
-        Framework.getProperties().setProperty(ConnectionHelper.SINGLE_DS, "jdbc/NuxeoTestDS");
-
         // create table in database
-        try (Connection connection = ConnectionHelper.getConnection(null)) {
+        String dataSourceName = JDBCConnection.getDataSourceName(coreFeature.getRepositoryName());
+        try (Connection connection = ConnectionHelper.getConnection(dataSourceName)) {
             try (Statement st = connection.createStatement()) {
                 String blobType;
                 String boolType;
@@ -131,7 +129,8 @@ public class TestSQLBinaryManager {
             // not initialized, not VCS
             return;
         }
-        try (Connection connection = ConnectionHelper.getConnection(null)) {
+        String dataSourceName = JDBCConnection.getDataSourceName(coreFeature.getRepositoryName());
+        try (Connection connection = ConnectionHelper.getConnection(dataSourceName)) {
             try (Statement st = connection.createStatement()) {
                 String sql = String.format("DROP TABLE %s", TABLE);
                 st.execute(sql);

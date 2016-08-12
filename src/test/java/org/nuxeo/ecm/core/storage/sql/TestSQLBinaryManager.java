@@ -52,6 +52,7 @@ import org.nuxeo.ecm.core.test.StorageConfiguration;
 import org.nuxeo.runtime.datasource.ConnectionHelper;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
+import org.nuxeo.runtime.transaction.TransactionHelper;
 
 /*
  * Note that this unit test cannot be run with Nuxeo 5.4.0 (NXP-6021 needed).
@@ -112,6 +113,9 @@ public class TestSQLBinaryManager {
                 st.execute(sql);
             }
         }
+
+        TransactionHelper.commitOrRollbackTransaction();
+        TransactionHelper.startTransaction();
 
         // create binary manager
         binaryManager = new SQLBinaryManager();

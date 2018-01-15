@@ -284,34 +284,32 @@ public class SQLBinaryManager extends CachingBinaryManager {
                     existing = false;
                 } else {
                     logSQL(checkSql, digest);
-                    PreparedStatement ps = connection.prepareStatement(checkSql);
-                    ps.setString(1, digest);
-                    ResultSet rs = ps.executeQuery();
-                    existing = rs.next();
-                    ps.close();
+                    try (PreparedStatement ps = connection.prepareStatement(checkSql)) {
+                        ps.setString(1, digest);
+                        try (ResultSet rs = ps.executeQuery()) {
+                            existing = rs.next();
+                        }
+                    }
                 }
                 if (!existing) {
                     // insert new blob
                     logSQL(putSql, digest, "somebinary", Boolean.TRUE);
-                    PreparedStatement ps = connection.prepareStatement(putSql);
-                    ps.setString(1, digest);
-                    // needs dbcp 1.4:
-                    // ps.setBlob(2, new FileInputStream(file), file.length());
-                    FileInputStream tmpis = new FileInputStream(file);
-                    try {
-                        ps.setBinaryStream(2, tmpis, (int) file.length());
-                        ps.setBoolean(3, true); // mark new additions for GC
-                        try {
-                            ps.execute();
-                        } catch (SQLException e) {
-                            if (!isDuplicateKeyException(e)) {
-                                throw e;
+                    try (PreparedStatement ps = connection.prepareStatement(putSql)) {
+                        ps.setString(1, digest);
+                        // needs dbcp 1.4:
+                        // ps.setBlob(2, new FileInputStream(file), file.length());
+                        try (FileInputStream tmpis = new FileInputStream(file)) {
+                            ps.setBinaryStream(2, tmpis, (int) file.length());
+                            ps.setBoolean(3, true); // mark new additions for GC
+                            try {
+                                ps.execute();
+                            } catch (SQLException e) {
+                                if (!isDuplicateKeyException(e)) {
+                                    throw e;
+                                }
                             }
                         }
-                    } finally {
-                        IOUtils.closeQuietly(tmpis);
                     }
-                    ps.close();
                 }
             } catch (SQLException e) {
                 throw new IOException(e);
@@ -332,26 +330,24 @@ public class SQLBinaryManager extends CachingBinaryManager {
             try {
                 connection = getConnection();
                 logSQL(getSql, digest);
-                PreparedStatement ps = connection.prepareStatement(getSql);
-                ps.setString(1, digest);
-                ResultSet rs = ps.executeQuery();
-                if (!rs.next()) {
-                    log.error("Unknown binary: " + digest);
-                    return false;
-                }
-                InputStream in = rs.getBinaryStream(1);
-                OutputStream out = null;
-                try {
-                    if (in == null) {
-                        log.error("Missing binary: " + digest);
-                        return false;
+                try (PreparedStatement ps = connection.prepareStatement(getSql)) {
+                    ps.setString(1, digest);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) {
+                            log.error("Unknown binary: " + digest);
+                            return false;
+                        }
+                        try (InputStream in = rs.getBinaryStream(1)) {
+                            if (in == null) {
+                                log.error("Missing binary: " + digest);
+                                return false;
+                            }
+                            // store in file
+                            try (OutputStream out = new FileOutputStream(tmp)) {
+                                IOUtils.copy(in, out);
+                            }
+                        }
                     }
-                    // store in file
-                    out = new FileOutputStream(tmp);
-                    IOUtils.copy(in, out);
-                } finally {
-                    IOUtils.closeQuietly(in);
-                    IOUtils.closeQuietly(out);
                 }
                 return true;
             } catch (SQLException e) {
@@ -478,17 +474,19 @@ public class SQLBinaryManager extends CachingBinaryManager {
                 logSQL(binaryManager.gcStatsSql, Boolean.TRUE);
                 ps = connection.prepareStatement(binaryManager.gcStatsSql);
                 ps.setBoolean(1, true); // marked
-                ResultSet rs = ps.executeQuery();
-                rs.next();
-                status.numBinaries = rs.getLong(1);
-                status.sizeBinaries = rs.getLong(2);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    status.numBinaries = rs.getLong(1);
+                    status.sizeBinaries = rs.getLong(2);
+                }
                 logSQL("  -> ?, ?", Long.valueOf(status.numBinaries), Long.valueOf(status.sizeBinaries));
                 logSQL(binaryManager.gcStatsSql, Boolean.FALSE);
                 ps.setBoolean(1, false); // unmarked
-                rs = ps.executeQuery();
-                rs.next();
-                status.numBinariesGC = rs.getLong(1);
-                status.sizeBinariesGC = rs.getLong(2);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    status.numBinariesGC = rs.getLong(1);
+                    status.sizeBinariesGC = rs.getLong(2);
+                }
                 logSQL("  -> ?, ?", Long.valueOf(status.numBinariesGC), Long.valueOf(status.sizeBinariesGC));
                 if (delete) {
                     // sweep

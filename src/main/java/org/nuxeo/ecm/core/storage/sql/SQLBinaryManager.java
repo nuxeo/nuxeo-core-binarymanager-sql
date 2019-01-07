@@ -35,6 +35,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.nuxeo.ecm.core.blob.BlobProviderDescriptor;
 import org.nuxeo.ecm.core.blob.binary.Binary;
 import org.nuxeo.ecm.core.blob.binary.BinaryGarbageCollector;
 import org.nuxeo.ecm.core.blob.binary.BinaryManager;
@@ -136,6 +137,9 @@ public class SQLBinaryManager extends CachingBinaryManager {
             if (StringUtils.isBlank(cacheSizeStr)) {
                 cacheSizeStr = DEFAULT_CACHE_SIZE;
             }
+        }
+        if (StringUtils.isNotBlank(properties.get(BlobProviderDescriptor.NAMESPACE))) {
+            throw new RuntimeException("Namespaces not implemented");
         }
 
         // create the SQL statements used
